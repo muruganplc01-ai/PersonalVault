@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>PersonalVault</AssemblyName>
+    <RootNamespace>PersonalVault</RootNamespace>
+    <Version>0.1.0</Version>
+    <Authors>You</Authors>
+    <Product>Personal Vault</Product>
+    <!--
+      This is a first cut. To customize the tray icon later, add a .ico file under
+      Resources\ and uncomment the line below.
+    -->
+    <!-- <ApplicationIcon>Resources\vault.ico</ApplicationIcon> -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Google Drive API client. If this exact version is no longer available when you
+      restore, run:  dotnet add package Google.Apis.Drive.v3
+      to pick up whatever the current version is - the code in Storage/GoogleDriveSync.cs
+      only uses stable, long-standing APIs from this package.
+    -->
+    <PackageReference Include="Google.Apis.Drive.v3" Version="1.68.0.3511" />
+  </ItemGroup>
+
+</Project>

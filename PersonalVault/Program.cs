@@ -1,0 +1,31 @@
+using System.Threading;
+using System.Windows.Forms;
+using PersonalVault.Forms;
+
+namespace PersonalVault;
+
+internal static class Program
+{
+    /// <summary>
+    /// Application entry point. Keeps a single instance running via a named mutex,
+    /// then hands off to the tray icon / application context for the rest of the
+    /// app's lifetime (there is intentionally no "main window" - see TrayApplicationContext).
+    /// </summary>
+    [STAThread]
+    private static void Main()
+    {
+        using var mutex = new Mutex(true, "PersonalVault-SingleInstance-Mutex", out bool isNew);
+        if (!isNew)
+        {
+            MessageBox.Show(
+                "Personal Vault is already running. Look for its icon in the system tray.",
+                "Personal Vault",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        ApplicationConfiguration.Initialize();
+        Application.Run(new TrayApplicationContext());
+    }
+}
