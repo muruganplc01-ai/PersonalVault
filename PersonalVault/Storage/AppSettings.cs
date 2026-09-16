@@ -20,6 +20,15 @@ public class AppSettings
     public string? PaymentsDriveFileId { get; set; }
 
     /// <summary>
+    /// Full path to a specific browser .exe to use for "Open URL" (Accounts tab) and the
+    /// Website "Open" button (Account Details), set from the Profile form. Null/empty
+    /// means use Windows' normal system default browser. This is a per-machine
+    /// preference (different PCs can have browsers installed in different places), so it
+    /// lives here in the unencrypted local settings rather than in the synced vault.
+    /// </summary>
+    public string? DefaultBrowserPath { get; set; }
+
+    /// <summary>
     /// Minutes of no keyboard/mouse activity anywhere on the system before the vault
     /// auto-locks and the secret has to be re-entered. 0 disables auto-lock.
     /// </summary>

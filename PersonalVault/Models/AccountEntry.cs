@@ -88,6 +88,15 @@ public class AccountEntry
 
     public RecurrenceType Recurrence { get; set; } = RecurrenceType.None;
 
+    /// <summary>
+    /// True if this bill is paid automatically (e.g. a credit card or utility on
+    /// autopay) rather than something you pay by hand each cycle. Purely informational -
+    /// it doesn't change due-date reminders or the Dues tab's filtering, it just shows
+    /// up as an "Autopay" indicator so it's obvious at a glance which accounts you don't
+    /// need to go pay manually.
+    /// </summary>
+    public bool IsAutomaticPayment { get; set; }
+
     public string Notes { get; set; } = string.Empty;
 
     /// <summary>

@@ -1,7 +1,7 @@
-using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Windows.Forms;
 using PersonalVault.Models;
+using PersonalVault.Utils;
 
 namespace PersonalVault.Forms;
 
@@ -13,6 +13,7 @@ public class AccountEditForm : Form
 {
     private readonly AccountEntry _entry;
     private readonly string _defaultOwnerName;
+    private readonly string? _defaultBrowserPath;
 
     private readonly ComboBox _categoryBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly Button _suggestFieldsButton = new() { Text = "+ Category Fields", AutoSize = true };
@@ -30,17 +31,19 @@ public class AccountEditForm : Form
     private readonly CheckBox _hasDueDateBox = new() { Text = "Has a due date", AutoSize = true, Anchor = AnchorStyles.Left };
     private readonly DateTimePicker _dueDatePicker = new() { Dock = DockStyle.Fill, Format = DateTimePickerFormat.Short, Enabled = false };
     private readonly ComboBox _recurrenceBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
+    private readonly CheckBox _autoPaymentBox = new() { Text = "This is paid automatically (autopay)", AutoSize = true, Anchor = AnchorStyles.Left };
     private readonly TextBox _notesBox = new() { Dock = DockStyle.Fill, Multiline = true, Height = 55, ScrollBars = ScrollBars.Vertical };
     private readonly TextBox _extraFieldsBox = new() { Dock = DockStyle.Fill, Multiline = true, Height = 70, ScrollBars = ScrollBars.Vertical };
 
-    public AccountEditForm(AccountEntry entry, string defaultOwnerName = "")
+    public AccountEditForm(AccountEntry entry, string defaultOwnerName = "", string? defaultBrowserPath = null)
     {
         _entry = entry;
         _defaultOwnerName = defaultOwnerName;
+        _defaultBrowserPath = defaultBrowserPath;
 
         Text = "Account Details";
         Width = 540;
-        Height = 690;
+        Height = 715;
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -100,6 +103,7 @@ public class AccountEditForm : Form
         AddRow(layout, ref row, "Due date:", duePanel);
 
         AddRow(layout, ref row, "Repeats:", _recurrenceBox);
+        AddRow(layout, ref row, "", _autoPaymentBox);
         AddRow(layout, ref row, "Notes:", _notesBox);
         AddRow(layout, ref row, "Extra info:\n(key=value,\none per line)", _extraFieldsBox);
 
@@ -157,6 +161,7 @@ public class AccountEditForm : Form
         _websiteBox.Text = _entry.Website;
         _phoneBox.Text = _entry.PhoneNumber;
         _recurrenceBox.SelectedItem = _entry.Recurrence.ToString();
+        _autoPaymentBox.Checked = _entry.IsAutomaticPayment;
         _notesBox.Text = _entry.Notes;
         _extraFieldsBox.Text = string.Join(Environment.NewLine, _entry.ExtraFields.Select(kv => $"{kv.Key}={kv.Value}"));
 
@@ -197,6 +202,7 @@ public class AccountEditForm : Form
         _entry.Website = _websiteBox.Text.Trim();
         _entry.PhoneNumber = _phoneBox.Text.Trim();
         _entry.Recurrence = Enum.Parse<RecurrenceType>(recurrenceText);
+        _entry.IsAutomaticPayment = _autoPaymentBox.Checked;
         _entry.Notes = _notesBox.Text;
         _entry.DueDate = _hasDueDateBox.Checked ? _dueDatePicker.Value.Date : null;
 
@@ -213,22 +219,15 @@ public class AccountEditForm : Form
     }
 
     /// <summary>
-    /// Opens the Website field in the system's default browser. Accepts a bare domain
-    /// (e.g. "statefarm.com") as well as a full URL - a bare domain gets "https://"
-    /// prepended, since Process.Start otherwise treats it as a search term / relative
-    /// path rather than launching a browser.
+    /// Opens the Website field - in the browser set on the Profile form
+    /// (_defaultBrowserPath), or the system default browser if none was set. Accepts a
+    /// bare domain (e.g. "statefarm.com") as well as a full URL via
+    /// BrowserLauncher.TryParseUrl.
     /// </summary>
     private void OpenWebsite()
     {
-        var text = _websiteBox.Text.Trim();
-        if (string.IsNullOrEmpty(text))
-            return;
-
-        if (!text.Contains("://"))
-            text = "https://" + text;
-
-        if (!Uri.TryCreate(text, UriKind.Absolute, out var uri) ||
-            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        var uri = BrowserLauncher.TryParseUrl(_websiteBox.Text);
+        if (uri == null)
         {
             MessageBox.Show(this, "That doesn't look like a valid website address.", "Personal Vault",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -237,10 +236,7 @@ public class AccountEditForm : Form
 
         try
         {
-            // UseShellExecute is required here (defaults to false on .NET Core/5+) so this
-            // hands the URL to Windows' own "open with default browser" behavior instead
-            // of trying to execute it as if it were a local program.
-            Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+            BrowserLauncher.Open(uri, _defaultBrowserPath);
         }
         catch (Exception ex)
         {

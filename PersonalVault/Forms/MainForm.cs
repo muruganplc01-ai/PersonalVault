@@ -18,6 +18,9 @@ public class MainForm : Form
     private readonly Func<Task> _signInToDrive;
     private readonly Func<IEnumerable<PaymentRecord>> _getPayments;
     private readonly Action<AccountEntry, decimal, DateTime> _markPaid;
+    private readonly Action<AccountEntry, decimal, DateTime, int, RecurrenceType> _backfillPayments;
+    private readonly Func<string?> _getDefaultBrowserPath;
+    private readonly Action<string?> _setDefaultBrowserPath;
     private readonly ListView _listView;
     private readonly TextBox _searchBox;
     private readonly ComboBox _categoryFilter;
@@ -68,13 +71,19 @@ public class MainForm : Form
         Func<Task> signInToDrive,
         string vaultFilePath,
         Func<IEnumerable<PaymentRecord>> getPayments,
-        Action<AccountEntry, decimal, DateTime> markPaid)
+        Action<AccountEntry, decimal, DateTime> markPaid,
+        Action<AccountEntry, decimal, DateTime, int, RecurrenceType> backfillPayments,
+        Func<string?> getDefaultBrowserPath,
+        Action<string?> setDefaultBrowserPath)
     {
         _vault = vault;
         _save = save;
         _signInToDrive = signInToDrive;
         _getPayments = getPayments;
         _markPaid = markPaid;
+        _backfillPayments = backfillPayments;
+        _getDefaultBrowserPath = getDefaultBrowserPath;
+        _setDefaultBrowserPath = setDefaultBrowserPath;
 
         Text = "Personal Vault";
         Width = 960;
@@ -197,6 +206,7 @@ public class MainForm : Form
         _listView.Columns.Add("Owner", 110);
         _listView.Columns.Add("Username", 140);
         _listView.Columns.Add("Due Date", 100);
+        _listView.Columns.Add("Autopay", 70);
         _listView.DoubleClick += (_, _) => EditSelected();
         _listView.DrawColumnHeader += ListView_DrawColumnHeader;
         _listView.DrawItem += (_, e) => e.DrawDefault = false; // rows are painted per-cell by DrawSubItem below
@@ -214,6 +224,7 @@ public class MainForm : Form
         var addBtn = new Button { Text = "Add Account", AutoSize = true };
         var editBtn = new Button { Text = "Edit", AutoSize = true };
         var deleteBtn = new Button { Text = "Delete", AutoSize = true };
+        var openUrlBtn = new Button { Text = "Open URL", AutoSize = true };
         var copyUserBtn = new Button { Text = "Copy Username", AutoSize = true };
         var copyPassBtn = new Button { Text = "Copy Password", AutoSize = true };
         var exportBtn = new Button { Text = "Export CSV...", AutoSize = true };
@@ -223,6 +234,7 @@ public class MainForm : Form
         addBtn.Click += (_, _) => AddNew();
         editBtn.Click += (_, _) => EditSelected();
         deleteBtn.Click += (_, _) => DeleteSelected();
+        openUrlBtn.Click += (_, _) => OpenSelectedUrl();
         copyUserBtn.Click += (_, _) => CopyField(a => a.UserName, "Username");
         copyPassBtn.Click += (_, _) => CopyField(a => a.Password, "Password");
         exportBtn.Click += (_, _) => ExportCsv();
@@ -231,7 +243,7 @@ public class MainForm : Form
 
         buttonPanel.Controls.AddRange(new Control[]
         {
-            addBtn, editBtn, deleteBtn, copyUserBtn, copyPassBtn, exportBtn, importBtn, profileBtn
+            addBtn, editBtn, deleteBtn, openUrlBtn, copyUserBtn, copyPassBtn, exportBtn, importBtn, profileBtn
         });
 
         var accountsTab = new TabPage("Accounts");
@@ -275,7 +287,8 @@ public class MainForm : Form
         _duesListView.Columns.Add("Institution", 130);
         _duesListView.Columns.Add("Owner", 100);
         _duesListView.Columns.Add("Due Date", 100);
-        _duesListView.Columns.Add("Last Paid", 180);
+        _duesListView.Columns.Add("Autopay", 70);
+        _duesListView.Columns.Add("Last Paid", 170);
         _duesListView.DrawColumnHeader += ListView_DrawColumnHeader;
         _duesListView.DrawItem += (_, e) => e.DrawDefault = false;
         _duesListView.DrawSubItem += ListView_DrawSubItem;
@@ -291,7 +304,10 @@ public class MainForm : Form
         };
         _markPaidButton = new Button { Text = "Mark as Paid...", AutoSize = true, Enabled = false };
         _markPaidButton.Click += (_, _) => MarkSelectedDuePaid();
+        var backfillButton = new Button { Text = "Backfill Past Payment...", AutoSize = true };
+        backfillButton.Click += (_, _) => BackfillPastPayment();
         duesButtonPanel.Controls.Add(_markPaidButton);
+        duesButtonPanel.Controls.Add(backfillButton);
 
         var duesTab = new TabPage("Dues");
         duesTab.Controls.Add(_duesListView);
@@ -404,6 +420,7 @@ public class MainForm : Form
             item.SubItems.Add(account.Institution);
             item.SubItems.Add(account.Owner);
             item.SubItems.Add(account.DueDate?.ToString("MMM d, yyyy") ?? "");
+            item.SubItems.Add(account.IsAutomaticPayment ? "Yes" : "");
             item.SubItems.Add(lastPaymentByAccount.TryGetValue(account.Id, out var lastPaid)
                 ? $"{lastPaid.AmountPaid:C} on {lastPaid.PaidDate:MMM d, yyyy}"
                 : "");
@@ -427,6 +444,27 @@ public class MainForm : Form
         // payment, advances/clears the due date, saves+uploads both files) and calls
         // RefreshData back on us once it's done - nothing else to do here.
         _markPaid(account, dialog.AmountPaid, dialog.PaidDate);
+    }
+
+    /// <summary>
+    /// Catches up payment history for months that were never entered - works on any
+    /// account (not just one currently showing as due), and can add several months at
+    /// once. Deliberately separate from Mark as Paid: this only records history, it
+    /// never touches the account's live due date.
+    /// </summary>
+    private void BackfillPastPayment()
+    {
+        if (_vault.Accounts.Count == 0)
+        {
+            MessageBox.Show(this, "Add an account first.", "Personal Vault",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var dialog = new BackfillPaymentForm(_vault.Accounts);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        _backfillPayments(dialog.SelectedAccount, dialog.AmountPaid, dialog.MostRecentPaidDate, dialog.Count, dialog.Spacing);
     }
 
     private static void ListView_DrawColumnHeader(object? sender, DrawListViewColumnHeaderEventArgs e)
@@ -484,6 +522,7 @@ public class MainForm : Form
             item.SubItems.Add(account.Owner);
             item.SubItems.Add(account.UserName);
             item.SubItems.Add(account.DueDate?.ToString("MMM d, yyyy") ?? "");
+            item.SubItems.Add(account.IsAutomaticPayment ? "Yes" : "");
             item.Tag = account;
             _listView.Items.Add(item);
         }
@@ -545,7 +584,7 @@ public class MainForm : Form
     private void AddNew()
     {
         var entry = new AccountEntry();
-        using var form = new AccountEditForm(entry, _vault.Profile.Name);
+        using var form = new AccountEditForm(entry, _vault.Profile.Name, _getDefaultBrowserPath());
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             _vault.Accounts.Add(entry);
@@ -559,7 +598,7 @@ public class MainForm : Form
         var account = SelectedAccount();
         if (account == null) return;
 
-        using var form = new AccountEditForm(account, _vault.Profile.Name);
+        using var form = new AccountEditForm(account, _vault.Profile.Name, _getDefaultBrowserPath());
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             account.ModifiedUtc = DateTime.UtcNow;
@@ -580,6 +619,34 @@ public class MainForm : Form
         _vault.Accounts.Remove(account);
         _save();
         ApplyFilter();
+    }
+
+    /// <summary>
+    /// Opens the selected account's Website in the browser set on the Profile form (or
+    /// the system default browser if none was set there).
+    /// </summary>
+    private void OpenSelectedUrl()
+    {
+        var account = SelectedAccount();
+        if (account == null) return;
+
+        var uri = BrowserLauncher.TryParseUrl(account.Website);
+        if (uri == null)
+        {
+            MessageBox.Show(this, "This account doesn't have a valid website URL set.", "Personal Vault",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        try
+        {
+            BrowserLauncher.Open(uri, _getDefaultBrowserPath());
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, "Could not open that website: " + ex.Message, "Personal Vault",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private void CopyField(Func<AccountEntry, string> selector, string label)
@@ -682,9 +749,10 @@ public class MainForm : Form
 
     private void EditProfile()
     {
-        using var form = new ProfileForm(_vault.Profile);
+        using var form = new ProfileForm(_vault.Profile, _getDefaultBrowserPath());
         if (form.ShowDialog(this) == DialogResult.OK)
         {
+            _setDefaultBrowserPath(form.SelectedBrowserPath);
             _save();
             ApplyFilter(); // Owner column defaults may be worth re-checking after a name change, cheap to just refresh.
         }

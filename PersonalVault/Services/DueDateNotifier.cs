@@ -99,5 +99,23 @@ public class DueDateNotifier : IDisposable
         _ => date
     };
 
+    /// <summary>
+    /// The reverse of AdvanceDueDate - steps one cycle into the past instead of the
+    /// future. Used by the Dues tab's "Backfill Past Payment..." dialog to generate a
+    /// run of historical payment dates (e.g. the last 6 months of a monthly credit card
+    /// bill) working backward from the most recent one entered. RecurrenceType.None
+    /// falls back to monthly spacing too, same reasoning as AdvanceDueDate would need if
+    /// it were ever asked to step a non-recurring bill - most things people backfill in
+    /// bulk are monthly even if the account's own Recurrence was never set.
+    /// </summary>
+    public static DateTime RewindDueDate(DateTime date, RecurrenceType recurrence) => recurrence switch
+    {
+        RecurrenceType.Weekly => date.AddDays(-7),
+        RecurrenceType.Monthly => date.AddMonths(-1),
+        RecurrenceType.Quarterly => date.AddMonths(-3),
+        RecurrenceType.Yearly => date.AddYears(-1),
+        _ => date.AddMonths(-1)
+    };
+
     public void Dispose() => _timer.Dispose();
 }

@@ -537,7 +537,10 @@ public class TrayApplicationContext : ApplicationContext
                 SignInToDriveAsync,
                 AppPaths.VaultLocalPath,
                 () => _payments?.Payments ?? Enumerable.Empty<PaymentRecord>(),
-                MarkAccountPaid);
+                MarkAccountPaid,
+                BackfillPayments,
+                () => _settings.DefaultBrowserPath,
+                SetDefaultBrowserPath);
             _mainForm.FormClosing += (_, e) =>
             {
                 // Closing the window just hides it - the app keeps running in the tray
@@ -730,6 +733,51 @@ public class TrayApplicationContext : ApplicationContext
         SaveVault();
         SavePayments();
         _mainForm?.RefreshData(_vault);
+    }
+
+    /// <summary>
+    /// Called from MainForm's Dues tab ("Backfill Past Payment..."). Adds `count`
+    /// PaymentRecords for `account`, spaced `spacing` apart and working backward from
+    /// `mostRecentDate` (so the most recent one entered gets exactly that date, and each
+    /// one before it is one cycle earlier). Unlike MarkAccountPaid, this never touches
+    /// the account's DueDate/LastNotifiedOn or calls SaveVault() - it's purely filling in
+    /// history, not affecting what's currently due, so only the payments file changes.
+    /// </summary>
+    private void BackfillPayments(AccountEntry account, decimal amountPaid, DateTime mostRecentDate, int count, RecurrenceType spacing)
+    {
+        if (_vault == null || _payments == null) return;
+
+        DebugLog.Write($"BackfillPayments: account='{account.Name}', amountPaid={amountPaid}, mostRecentDate={mostRecentDate:d}, count={count}, spacing={spacing}.");
+
+        var date = mostRecentDate;
+        for (int i = 0; i < count; i++)
+        {
+            _payments.Payments.Add(new PaymentRecord
+            {
+                AccountId = account.Id,
+                AccountName = account.Name,
+                AmountPaid = amountPaid,
+                PaidDate = date
+                // DueDateAtPayment deliberately left null - these are historical catch-up
+                // entries, not tied to a specific due-date cycle the way Mark as Paid is.
+            });
+            date = DueDateNotifier.RewindDueDate(date, spacing);
+        }
+
+        SavePayments();
+        _mainForm?.RefreshData(_vault);
+    }
+
+    /// <summary>
+    /// Called from MainForm's Profile form (Save) when the "Default browser" field
+    /// changed. This is a per-machine, unencrypted preference (AppSettings), not
+    /// something that rides along in the synced vault - see AppSettings.DefaultBrowserPath.
+    /// </summary>
+    private void SetDefaultBrowserPath(string? path)
+    {
+        DebugLog.Write($"SetDefaultBrowserPath: {(string.IsNullOrEmpty(path) ? "(cleared - back to system default)" : path)}.");
+        _settings.DefaultBrowserPath = path;
+        _settings.Save();
     }
 
     /// <summary>

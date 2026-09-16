@@ -32,14 +32,24 @@ public class ProfileForm : Form
         BorderStyle = BorderStyle.FixedSingle
     };
     private readonly TextBox _nameBox = new() { Location = new Point(20, 182), Width = 340 };
+    private readonly TextBox _browserPathBox = new() { Location = new Point(20, 268), Width = 250, ReadOnly = true };
 
-    public ProfileForm(VaultProfile profile)
+    /// <summary>
+    /// The chosen default-browser .exe path, or null to mean "use Windows' normal
+    /// default browser" - set once the user clicks Save. AppSettings.DefaultBrowserPath
+    /// isn't touched directly by this form; the caller (MainForm/TrayApplicationContext)
+    /// reads this back out and persists it, same "mutate/return, caller decides whether
+    /// to persist" pattern as everything else here.
+    /// </summary>
+    public string? SelectedBrowserPath { get; private set; }
+
+    public ProfileForm(VaultProfile profile, string? currentDefaultBrowserPath = null)
     {
         _profile = profile;
 
         Text = "Your Profile";
         Width = 400;
-        Height = 320;
+        Height = 390;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MaximizeBox = false;
@@ -62,8 +72,27 @@ public class ProfileForm : Form
         Controls.Add(new Label { Text = "Name:", AutoSize = true, Location = new Point(20, 162) });
         Controls.Add(_nameBox);
 
-        var cancelButton = new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel, Location = new Point(230, 235) };
-        var saveButton = new Button { Text = "Save", AutoSize = true, Location = new Point(315, 235) };
+        Controls.Add(new Label { Text = "Default browser:", AutoSize = true, Location = new Point(20, 220) });
+        Controls.Add(new Label
+        {
+            Text = "Used when opening a website link from Personal Vault. Leave blank to use Windows' normal default browser.",
+            AutoSize = false,
+            Location = new Point(20, 240),
+            Width = 350,
+            Height = 30,
+            ForeColor = Color.DimGray
+        });
+
+        var browseBrowserBtn = new Button { Text = "Browse...", AutoSize = true, Location = new Point(280, 267) };
+        var useSystemDefaultBtn = new Button { Text = "Use System Default", AutoSize = true, Location = new Point(20, 296) };
+        browseBrowserBtn.Click += BrowseBrowserBtn_Click;
+        useSystemDefaultBtn.Click += (_, _) => _browserPathBox.Text = string.Empty;
+        Controls.Add(_browserPathBox);
+        Controls.Add(browseBrowserBtn);
+        Controls.Add(useSystemDefaultBtn);
+
+        var cancelButton = new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel, Location = new Point(230, 335) };
+        var saveButton = new Button { Text = "Save", AutoSize = true, Location = new Point(315, 335) };
         saveButton.Click += SaveButton_Click;
         Controls.Add(cancelButton);
         Controls.Add(saveButton);
@@ -72,6 +101,7 @@ public class ProfileForm : Form
         CancelButton = cancelButton;
 
         _nameBox.Text = _profile.Name;
+        _browserPathBox.Text = currentDefaultBrowserPath ?? string.Empty;
         if (_profile.HasPicture)
         {
             try
@@ -112,6 +142,18 @@ public class ProfileForm : Form
         }
     }
 
+    private void BrowseBrowserBtn_Click(object? sender, EventArgs e)
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Filter = "Applications (*.exe)|*.exe|All files|*.*",
+            Title = "Choose a browser"
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        _browserPathBox.Text = dialog.FileName;
+    }
+
     private void SaveButton_Click(object? sender, EventArgs e)
     {
         _profile.Name = _nameBox.Text.Trim();
@@ -122,6 +164,9 @@ public class ProfileForm : Form
                 ? string.Empty
                 : Convert.ToBase64String(_pendingPictureBytes);
         }
+
+        var browserPath = _browserPathBox.Text.Trim();
+        SelectedBrowserPath = string.IsNullOrEmpty(browserPath) ? null : browserPath;
 
         DialogResult = DialogResult.OK;
     }
