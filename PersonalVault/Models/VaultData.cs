@@ -6,7 +6,10 @@ namespace PersonalVault.Models;
 /// </summary>
 public class VaultData
 {
-    public int SchemaVersion { get; set; } = 1;
+    public int SchemaVersion { get; set; } = 2;
     public DateTime ModifiedUtc { get; set; } = DateTime.UtcNow;
     public List<AccountEntry> Accounts { get; set; } = new();
+
+    /// <summary>The vault owner's name/picture - see VaultProfile. Never null; starts empty.</summary>
+    public VaultProfile Profile { get; set; } = new();
 }

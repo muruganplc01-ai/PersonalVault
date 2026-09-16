@@ -3,6 +3,7 @@ using Google.Apis.Drive.v3;
 using Google.Apis.Services;
 using Google.Apis.Upload;
 using Google.Apis.Util.Store;
+using PersonalVault.Utils;
 using DriveFile = Google.Apis.Drive.v3.Data.File;
 
 namespace PersonalVault.Storage;
@@ -22,6 +23,9 @@ public class GoogleDriveSync
     private const string ApplicationName = "Personal Vault";
     public const string RemoteFileName = "PersonalVaultData.pvlt";
 
+    /// <summary>Separate Drive file for payment history (see PaymentsStorage) - same account, same drive.file scope, just a different file name.</summary>
+    public const string RemotePaymentsFileName = "PersonalVaultPayments.pvlt";
+
     private DriveService? _service;
 
     public bool IsAuthenticated => _service != null;
@@ -36,32 +40,60 @@ public class GoogleDriveSync
     /// </summary>
     public async Task<bool> SignInAsync(bool allowInteractive)
     {
-        if (!HasStoredCredentialsFile)
-            return false;
+        DebugLog.Write($"SignInAsync: called with allowInteractive={allowInteractive}. Already authenticated (_service != null)? {IsAuthenticated}");
 
-        if (!allowInteractive && !HasCachedToken())
+        if (!HasStoredCredentialsFile)
+        {
+            DebugLog.Write($"SignInAsync: credentials.json NOT found at '{AppPaths.CredentialsJsonPath}'. Returning false.");
             return false;
+        }
+        DebugLog.Write($"SignInAsync: credentials.json found at '{AppPaths.CredentialsJsonPath}'.");
+
+        bool hasCachedToken = HasCachedToken();
+        DebugLog.Write($"SignInAsync: HasCachedToken() = {hasCachedToken} (checked '{AppPaths.TokenStoreFolder}').");
+
+        if (!allowInteractive && !hasCachedToken)
+        {
+            DebugLog.Write("SignInAsync: allowInteractive=false and no cached token - returning false without prompting (this is the silent startup attempt, not a real failure).");
+            return false;
+        }
 
         AppPaths.EnsureFoldersExist();
 
-        using var stream = new FileStream(AppPaths.CredentialsJsonPath, FileMode.Open, FileAccess.Read);
-        var clientSecrets = (await GoogleClientSecrets.FromStreamAsync(stream)).Secrets;
-
-        var credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
-            clientSecrets,
-            Scopes,
-            "personal-vault-user",
-            CancellationToken.None,
-            new FileDataStore(AppPaths.TokenStoreFolder, true));
-
-        _service = new DriveService(new BaseClientService.Initializer
+        try
         {
-            HttpClientInitializer = credential,
-            ApplicationName = ApplicationName
-        });
+            using var stream = new FileStream(AppPaths.CredentialsJsonPath, FileMode.Open, FileAccess.Read);
+            var clientSecrets = (await GoogleClientSecrets.FromStreamAsync(stream)).Secrets;
+            DebugLog.Write($"SignInAsync: credentials.json parsed OK (ClientId ends with '...{Suffix(clientSecrets.ClientId)}'). Calling GoogleWebAuthorizationBroker.AuthorizeAsync (this is where a browser window should open if a fresh sign-in is needed)...");
 
-        return true;
+            var credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
+                clientSecrets,
+                Scopes,
+                "personal-vault-user",
+                CancellationToken.None,
+                new FileDataStore(AppPaths.TokenStoreFolder, true));
+
+            DebugLog.Write("SignInAsync: AuthorizeAsync returned a credential without throwing - sign-in succeeded.");
+
+            _service = new DriveService(new BaseClientService.Initializer
+            {
+                HttpClientInitializer = credential,
+                ApplicationName = ApplicationName
+            });
+
+            DebugLog.Write("SignInAsync: DriveService created. IsAuthenticated is now true. Returning true.");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            DebugLog.WriteException("SignInAsync", ex);
+            throw;
+        }
     }
+
+    /// <summary>Last handful of characters only, for logging - enough to tell one client apart from another without writing the whole id to a log file.</summary>
+    private static string Suffix(string? value, int length = 6) =>
+        string.IsNullOrEmpty(value) ? "(empty)" : value[Math.Max(0, value.Length - length)..];
 
     private static bool HasCachedToken()
     {
@@ -72,74 +104,232 @@ public class GoogleDriveSync
             && Directory.EnumerateFiles(AppPaths.TokenStoreFolder).Any();
     }
 
-    public async Task<string?> FindVaultFileIdAsync()
+    public Task<string?> FindVaultFileIdAsync() => FindFileIdAsync(RemoteFileName);
+
+    /// <summary>
+    /// Generalized version of FindVaultFileIdAsync that works for any remote file name -
+    /// used for both the vault (RemoteFileName) and the payments file
+    /// (RemotePaymentsFileName), which are separate files on Drive but share this same
+    /// lookup-by-name logic.
+    /// </summary>
+    public async Task<string?> FindFileIdAsync(string remoteFileName)
     {
         RequireAuthenticated();
-        var request = _service!.Files.List();
-        request.Q = $"name = '{RemoteFileName}' and trashed = false";
-        request.Spaces = "drive";
-        request.Fields = "files(id, name, modifiedTime)";
-        var result = await request.ExecuteAsync();
-        return result.Files.Count > 0 ? result.Files[0].Id : null;
+        DebugLog.Write($"FindFileIdAsync: searching Drive for a file named '{remoteFileName}'...");
+        try
+        {
+            var request = _service!.Files.List();
+            request.Q = $"name = '{remoteFileName}' and trashed = false";
+            request.Spaces = "drive";
+            request.Fields = "files(id, name, modifiedTime)";
+            var result = await request.ExecuteAsync();
+
+            DebugLog.Write($"FindFileIdAsync: query for '{remoteFileName}' returned {result.Files.Count} matching file(s).");
+            if (result.Files.Count > 0)
+            {
+                var f = result.Files[0];
+                DebugLog.Write($"FindFileIdAsync: using file id '...{Suffix(f.Id)}' (name='{f.Name}').");
+                return f.Id;
+            }
+            DebugLog.Write($"FindFileIdAsync: no existing file named '{remoteFileName}' found on Drive - a fresh upload will create one.");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            DebugLog.WriteException("FindFileIdAsync", ex);
+            throw;
+        }
     }
 
     public async Task<DateTime?> GetRemoteModifiedTimeAsync(string fileId)
     {
         RequireAuthenticated();
-        var request = _service!.Files.Get(fileId);
-        request.Fields = "modifiedTime";
-        var file = await request.ExecuteAsync();
+        try
+        {
+            var request = _service!.Files.Get(fileId);
+            request.Fields = "modifiedTime";
+            var file = await request.ExecuteAsync();
 
-        // Read the raw ISO-8601 string rather than a typed DateTime/DateTimeOffset property:
-        // the Drive client library has renamed that typed property across versions
-        // (ModifiedTime -> ModifiedTimeDateTimeOffset), but the raw string field has stayed
-        // stable, so parsing it ourselves avoids a version-specific compile break.
-        if (string.IsNullOrEmpty(file.ModifiedTimeRaw))
-            return null;
+            // Read the raw ISO-8601 string rather than a typed DateTime/DateTimeOffset property:
+            // the Drive client library has renamed that typed property across versions
+            // (ModifiedTime -> ModifiedTimeDateTimeOffset), but the raw string field has stayed
+            // stable, so parsing it ourselves avoids a version-specific compile break.
+            if (string.IsNullOrEmpty(file.ModifiedTimeRaw))
+            {
+                DebugLog.Write("GetRemoteModifiedTimeAsync: Drive returned no modifiedTime for this file - returning null.");
+                return null;
+            }
 
-        return DateTime.Parse(
-            file.ModifiedTimeRaw,
-            System.Globalization.CultureInfo.InvariantCulture,
-            System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal);
+            var parsed = DateTime.Parse(
+                file.ModifiedTimeRaw,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal);
+            DebugLog.Write($"GetRemoteModifiedTimeAsync: remote modifiedTime (UTC) = {parsed:O}.");
+            return parsed;
+        }
+        catch (Exception ex)
+        {
+            DebugLog.WriteException("GetRemoteModifiedTimeAsync", ex);
+            throw;
+        }
     }
 
     public async Task<byte[]> DownloadAsync(string fileId)
     {
         RequireAuthenticated();
-        using var ms = new MemoryStream();
-        await _service!.Files.Get(fileId).DownloadAsync(ms);
-        return ms.ToArray();
+        DebugLog.Write($"DownloadAsync: downloading file id '...{Suffix(fileId)}'...");
+        try
+        {
+            using var ms = new MemoryStream();
+            await _service!.Files.Get(fileId).DownloadAsync(ms);
+            DebugLog.Write($"DownloadAsync: downloaded {ms.Length} byte(s).");
+            return ms.ToArray();
+        }
+        catch (Exception ex)
+        {
+            DebugLog.WriteException("DownloadAsync", ex);
+            throw;
+        }
     }
 
-    /// <summary>Creates the remote file if existingFileId is null, otherwise updates it in place. Returns the file id.</summary>
-    public async Task<string> UploadOrUpdateAsync(string localFilePath, string? existingFileId)
+    /// <summary>
+    /// Creates the remote file if existingFileId is null, otherwise updates it in place.
+    /// Returns the file id. remoteFileName is only used when creating a brand-new file
+    /// (an update keeps whatever name the existing file already has); defaults to
+    /// RemoteFileName (the vault) when not specified, so existing callers don't need to
+    /// change - pass RemotePaymentsFileName for the payments file instead.
+    /// </summary>
+    public async Task<string> UploadOrUpdateAsync(string localFilePath, string? existingFileId, string? remoteFileName = null)
     {
         RequireAuthenticated();
-        using var stream = new FileStream(localFilePath, FileMode.Open, FileAccess.Read);
 
-        if (!string.IsNullOrEmpty(existingFileId))
+        var fileInfo = new FileInfo(localFilePath);
+        DebugLog.Write($"UploadOrUpdateAsync: local file '{localFilePath}' exists={fileInfo.Exists}, size={(fileInfo.Exists ? fileInfo.Length : -1)} byte(s). existingFileId={(existingFileId == null ? "(null - will create new)" : "..." + Suffix(existingFileId))}.");
+
+        try
         {
-            var updateRequest = _service!.Files.Update(new DriveFile(), existingFileId, stream, "application/octet-stream");
-            var progress = await updateRequest.UploadAsync();
-            if (progress.Status != UploadStatus.Completed)
-                throw new IOException("Google Drive upload did not complete: " + progress.Exception?.Message);
-            return existingFileId;
+            using var stream = new FileStream(localFilePath, FileMode.Open, FileAccess.Read);
+
+            if (!string.IsNullOrEmpty(existingFileId))
+            {
+                DebugLog.Write("UploadOrUpdateAsync: updating existing Drive file...");
+                var updateRequest = _service!.Files.Update(new DriveFile(), existingFileId, stream, "application/octet-stream");
+                var progress = await updateRequest.UploadAsync();
+                DebugLog.Write($"UploadOrUpdateAsync: update finished with status={progress.Status}, bytesSent={progress.BytesSent}.");
+                if (progress.Status != UploadStatus.Completed)
+                {
+                    DebugLog.WriteException("UploadOrUpdateAsync (update)", progress.Exception
+                        ?? new IOException($"Upload status was {progress.Status}, not Completed."));
+                    throw new IOException("Google Drive upload did not complete: " + progress.Exception?.Message);
+                }
+                DebugLog.Write("UploadOrUpdateAsync: update succeeded.");
+                return existingFileId;
+            }
+            else
+            {
+                var newFileName = remoteFileName ?? RemoteFileName;
+                DebugLog.Write($"UploadOrUpdateAsync: creating new Drive file named '{newFileName}'...");
+                var metadata = new DriveFile { Name = newFileName };
+                var createRequest = _service!.Files.Create(metadata, stream, "application/octet-stream");
+                createRequest.Fields = "id";
+                var progress = await createRequest.UploadAsync();
+                DebugLog.Write($"UploadOrUpdateAsync: create finished with status={progress.Status}, bytesSent={progress.BytesSent}.");
+                if (progress.Status != UploadStatus.Completed)
+                {
+                    DebugLog.WriteException("UploadOrUpdateAsync (create)", progress.Exception
+                        ?? new IOException($"Upload status was {progress.Status}, not Completed."));
+                    throw new IOException("Google Drive upload did not complete: " + progress.Exception?.Message);
+                }
+                DebugLog.Write($"UploadOrUpdateAsync: create succeeded, new file id '...{Suffix(createRequest.ResponseBody.Id)}'.");
+                return createRequest.ResponseBody.Id;
+            }
         }
-        else
+        catch (Exception ex)
         {
-            var metadata = new DriveFile { Name = RemoteFileName };
-            var createRequest = _service!.Files.Create(metadata, stream, "application/octet-stream");
-            createRequest.Fields = "id";
-            var progress = await createRequest.UploadAsync();
-            if (progress.Status != UploadStatus.Completed)
-                throw new IOException("Google Drive upload did not complete: " + progress.Exception?.Message);
-            return createRequest.ResponseBody.Id;
+            DebugLog.WriteException("UploadOrUpdateAsync", ex);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Keeps the vault file's last <paramref name="keep"/> revisions on Drive instead of
+    /// only the current one, so an accidental delete, a bad save, or a botched sync has
+    /// something to recover from. Uses Drive's own revision history (every update to the
+    /// file already creates one) - this just pins the newest one so it isn't silently
+    /// aged out by Drive's default retention, then prunes anything older than the last
+    /// <paramref name="keep"/>. Best-effort: any failure here is swallowed rather than
+    /// treated as a sync failure, since losing a rotation cycle is harmless.
+    /// </summary>
+    public async Task PruneOldRevisionsAsync(string fileId, int keep = 5)
+    {
+        RequireAuthenticated();
+        DebugLog.Write($"PruneOldRevisionsAsync: starting for file id '...{Suffix(fileId)}', keep={keep}.");
+        try
+        {
+            var fileRequest = _service!.Files.Get(fileId);
+            fileRequest.Fields = "headRevisionId";
+            var file = await fileRequest.ExecuteAsync();
+
+            if (!string.IsNullOrEmpty(file.HeadRevisionId))
+            {
+                try
+                {
+                    var pin = _service.Revisions.Update(
+                        new Google.Apis.Drive.v3.Data.Revision { KeepForever = true },
+                        fileId, file.HeadRevisionId);
+                    await pin.ExecuteAsync();
+                    DebugLog.Write($"PruneOldRevisionsAsync: pinned head revision '...{Suffix(file.HeadRevisionId)}' with KeepForever.");
+                }
+                catch (Exception ex)
+                {
+                    // Not fatal - worst case this revision ages out under Drive's own
+                    // default retention instead of ours.
+                    DebugLog.WriteException("PruneOldRevisionsAsync (pin head revision - non-fatal)", ex);
+                }
+            }
+
+            var listRequest = _service.Revisions.List(fileId);
+            listRequest.Fields = "revisions(id, modifiedTime)";
+            var revisions = await listRequest.ExecuteAsync();
+            DebugLog.Write($"PruneOldRevisionsAsync: Drive reports {revisions.Revisions?.Count ?? 0} total revision(s).");
+
+            // RFC3339 UTC timestamps ("...Z") sort correctly as plain strings, so this
+            // avoids yet another version-sensitive typed date property (see
+            // GetRemoteModifiedTimeAsync above for why we've been burned by those before).
+            var newestFirst = revisions.Revisions
+                .Where(r => !string.IsNullOrEmpty(r.ModifiedTimeRaw))
+                .OrderByDescending(r => r.ModifiedTimeRaw, StringComparer.Ordinal)
+                .ToList();
+
+            var toPrune = newestFirst.Skip(keep).ToList();
+            DebugLog.Write($"PruneOldRevisionsAsync: pruning {toPrune.Count} revision(s) beyond the newest {keep}.");
+
+            foreach (var old in toPrune)
+            {
+                try { await _service.Revisions.Delete(fileId, old.Id).ExecuteAsync(); }
+                catch (Exception ex)
+                {
+                    // best-effort - a failed prune just costs a bit more Drive storage, nothing breaks
+                    DebugLog.WriteException($"PruneOldRevisionsAsync (delete revision '...{Suffix(old.Id)}' - non-fatal)", ex);
+                }
+            }
+
+            DebugLog.Write("PruneOldRevisionsAsync: finished.");
+        }
+        catch (Exception ex)
+        {
+            // Backup rotation is a nice-to-have on top of a successful sync, never a
+            // reason to make the sync itself look like it failed.
+            DebugLog.WriteException("PruneOldRevisionsAsync (non-fatal, sync itself already succeeded)", ex);
         }
     }
 
     private void RequireAuthenticated()
     {
         if (_service == null)
+        {
+            DebugLog.Write("RequireAuthenticated: _service is null - throwing InvalidOperationException. (This means IsAuthenticated is false - a Drive call was attempted before/without a successful SignInAsync.)");
             throw new InvalidOperationException("Not signed in to Google Drive yet.");
+        }
     }
 }

@@ -14,6 +14,13 @@ public static class AppPaths
     public static readonly string VaultLocalPath = Path.Combine(RootFolder, "vault.pvlt");
 
     /// <summary>
+    /// Payment history recorded from the Dues tab's "Mark as Paid" button - a separate
+    /// encrypted file from the vault (same secret, same AES-256-GCM scheme via
+    /// VaultCrypto/PaymentsStorage) so it has its own save/upload cycle.
+    /// </summary>
+    public static readonly string PaymentsLocalPath = Path.Combine(RootFolder, "payments.pvlt");
+
+    /// <summary>
     /// OAuth client secret downloaded from Google Cloud Console (Desktop app type).
     /// See README.md for how to create this. This file identifies the *app*, not you -
     /// it is not itself a credential to your data.

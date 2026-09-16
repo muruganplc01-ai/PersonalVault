@@ -75,7 +75,7 @@ public class DueDateNotifier : IDisposable
             // about the same past date.
             if (isOverdue && account.Recurrence != RecurrenceType.None)
             {
-                account.DueDate = Advance(account.DueDate.Value, account.Recurrence);
+                account.DueDate = AdvanceDueDate(account.DueDate.Value, account.Recurrence);
                 account.LastNotifiedOn = null;
             }
         }
@@ -84,7 +84,13 @@ public class DueDateNotifier : IDisposable
             _persistNotifiedState();
     }
 
-    private static DateTime Advance(DateTime date, RecurrenceType recurrence) => recurrence switch
+    /// <summary>
+    /// Rolls a due date forward one recurrence cycle. Public/static so
+    /// TrayApplicationContext.MarkAccountPaid can reuse the exact same rule when a
+    /// recurring bill is marked paid from the Dues tab, instead of a bill only ever
+    /// advancing once an overdue reminder happens to fire.
+    /// </summary>
+    public static DateTime AdvanceDueDate(DateTime date, RecurrenceType recurrence) => recurrence switch
     {
         RecurrenceType.Weekly => date.AddDays(7),
         RecurrenceType.Monthly => date.AddMonths(1),

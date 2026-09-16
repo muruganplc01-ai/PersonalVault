@@ -1,0 +1,494 @@
+<title>Personal Vault Drive Setup</title>
+<style>
+  :root {
+    --paper: #f7f4ee;
+    --paper-raised: #ffffff;
+    --ink: #1e2430;
+    --ink-soft: #5b6472;
+    --rule: #ddd6c7;
+    --brass: #93672c;
+    --brass-strong: #7a5322;
+    --brass-wash: #f0e4cd;
+    --teal: #2f6b4f;
+    --teal-wash: #e3efe7;
+    --rust: #a34a24;
+    --rust-wash: #f6e6dc;
+    --mono-chip-bg: #eee9dc;
+    --mono-chip-ink: #4a4335;
+    --shadow: 0 1px 2px rgba(30,36,48,0.06), 0 8px 24px rgba(30,36,48,0.06);
+  }
+
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --paper: #14171d;
+      --paper-raised: #1c212a;
+      --ink: #ece8de;
+      --ink-soft: #a1a7b3;
+      --rule: #333a46;
+      --brass: #cf9f54;
+      --brass-strong: #e2b46e;
+      --brass-wash: #2c2418;
+      --teal: #7cc9a3;
+      --teal-wash: #16261e;
+      --rust: #e2895d;
+      --rust-wash: #2c1c14;
+      --mono-chip-bg: #262b34;
+      --mono-chip-ink: #cfd3da;
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #14171d;
+    --paper-raised: #1c212a;
+    --ink: #ece8de;
+    --ink-soft: #a1a7b3;
+    --rule: #333a46;
+    --brass: #cf9f54;
+    --brass-strong: #e2b46e;
+    --brass-wash: #2c2418;
+    --teal: #7cc9a3;
+    --teal-wash: #16261e;
+    --rust: #e2895d;
+    --rust-wash: #2c1c14;
+    --mono-chip-bg: #262b34;
+    --mono-chip-ink: #cfd3da;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    padding-inline: 20px;
+    padding-block: 48px 96px;
+  }
+
+  h1, h2, h3 { font-family: "Fraunces", Georgia, serif; text-wrap: balance; margin: 0; }
+
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+  }
+
+  /* ---------- Header ---------- */
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--brass-strong);
+    background: var(--brass-wash);
+    border-radius: 999px;
+    padding: 5px 12px 5px 10px;
+    margin-bottom: 22px;
+  }
+  .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--brass); }
+
+  header h1 {
+    font-size: clamp(30px, 5vw, 42px);
+    font-weight: 600;
+    line-height: 1.08;
+    letter-spacing: -0.01em;
+  }
+
+  header .sub {
+    margin-top: 14px;
+    font-size: 17px;
+    color: var(--ink-soft);
+    max-width: 56ch;
+  }
+
+  /* ---------- Panels ---------- */
+
+  .panel {
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    padding: 22px 24px;
+    margin-top: 28px;
+  }
+
+  .panel h2 {
+    font-size: 15px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--brass-strong);
+    margin-bottom: 10px;
+  }
+
+  .cost-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-top: 14px;
+  }
+  .cost-item .num {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--teal);
+    font-variant-numeric: tabular-nums;
+  }
+  .cost-item .label {
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-top: 2px;
+  }
+  @media (max-width: 520px) {
+    .cost-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ---------- Steps ---------- */
+
+  .steps {
+    margin-top: 40px;
+    position: relative;
+  }
+
+  .steps::before {
+    content: "";
+    position: absolute;
+    left: 21px;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    background: var(--rule);
+  }
+
+  .step {
+    position: relative;
+    padding-left: 60px;
+    margin-bottom: 34px;
+  }
+  .step:last-child { margin-bottom: 0; }
+
+  .step-badge {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--paper-raised);
+    border: 2px solid var(--brass);
+    color: var(--brass-strong);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-weight: 600;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow);
+  }
+
+  .step h3 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .crumb {
+    display: inline-flex;
+    align-items: center;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12.5px;
+    color: var(--mono-chip-ink);
+    background: var(--mono-chip-bg);
+    border-radius: 6px;
+    padding: 4px 9px;
+    margin-bottom: 12px;
+  }
+
+  .step p { margin: 10px 0 0; }
+  .step ul, .step ol { margin: 10px 0 0; padding-left: 22px; }
+  .step li { margin-bottom: 6px; }
+
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.92em;
+    background: var(--mono-chip-bg);
+    color: var(--mono-chip-ink);
+    padding: 0.1em 0.4em;
+    border-radius: 4px;
+  }
+
+  /* ---------- Callouts ---------- */
+
+  .callout {
+    margin-top: 14px;
+    border-radius: 10px;
+    padding: 13px 16px;
+    font-size: 14.5px;
+    display: flex;
+    gap: 10px;
+  }
+  .callout .icon { flex: none; font-size: 15px; line-height: 1.5; }
+  .callout.gotcha { background: var(--rust-wash); color: var(--rust); }
+  .callout.gotcha strong { color: var(--rust); }
+  .callout.note { background: var(--mono-chip-bg); color: var(--ink-soft); }
+  .callout.done { background: var(--teal-wash); color: var(--teal); }
+  .callout p, .callout span { margin: 0; }
+  .callout b { color: inherit; }
+
+  /* ---------- Troubleshooting ---------- */
+
+  .trouble {
+    margin-top: 44px;
+  }
+  .trouble h2 {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .trouble .sub { color: var(--ink-soft); margin-bottom: 20px; font-size: 14.5px; }
+
+  .qa {
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow);
+  }
+  .qa .q {
+    font-weight: 600;
+    font-size: 15px;
+    display: flex;
+    gap: 8px;
+  }
+  .qa .q .mark {
+    color: var(--rust);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  .qa .a { margin-top: 6px; font-size: 14.5px; color: var(--ink-soft); }
+  .qa .a code { font-size: 0.9em; }
+
+  /* ---------- Footer ---------- */
+
+  footer {
+    margin-top: 48px;
+    padding-top: 22px;
+    border-top: 1px solid var(--rule);
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow"><span class="dot"></span>Field-tested today, not copied from docs</div>
+    <h1>Set up your own Google Drive connection</h1>
+    <p class="sub">
+      A self-service guide for Personal Vault. Follow this on your own PC, signed in with
+      your own Google account, and everything you create belongs to you alone — your own
+      project, your own credential, your own bill (which will be $0).
+    </p>
+  </header>
+
+  <div class="panel">
+    <h2>Cost &amp; ownership, up front</h2>
+    <div class="cost-grid">
+      <div class="cost-item">
+        <div class="num">$0</div>
+        <div class="label">No billing account or card required for this</div>
+      </div>
+      <div class="cost-item">
+        <div class="num">~10 min</div>
+        <div class="label">One-time setup, mostly clicking "Next"</div>
+      </div>
+      <div class="cost-item">
+        <div class="num">Yours</div>
+        <div class="label">You own this project — nobody else is responsible for it</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="steps">
+
+    <div class="step">
+      <div class="step-badge">1</div>
+      <span class="crumb">console.cloud.google.com</span>
+      <h3>Create your own project</h3>
+      <p>
+        Sign in with the Google account you want this vault tied to. Click the project
+        switcher near the top-left (it may say "Select a project") → <b>New Project</b>.
+        Name it anything, e.g. <code>PersonalVault</code>, and create it.
+      </p>
+      <div class="callout note">
+        <span class="icon">💳</span>
+        <span>You may see a banner offering "$300 in free credit" — that's an unrelated general
+        Cloud trial. Dismiss it. Nothing here needs it or touches billing.</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">2</div>
+      <span class="crumb">Search bar → "Google Drive API"</span>
+      <h3>Enable the Drive API</h3>
+      <p>
+        With your new project selected, use the search bar at the top of the console to find
+        <b>Google Drive API</b>, open it, and click <b>Enable</b>.
+      </p>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">3</div>
+      <span class="crumb">Google Auth Platform → Overview</span>
+      <h3>Set up the consent screen</h3>
+      <p>
+        Google recently renamed this from "OAuth consent screen" to <b>Google Auth
+        Platform</b> — same thing, new name. Click <b>Get started</b> and fill in:
+      </p>
+      <ul>
+        <li>App name — anything, e.g. <code>Personal Vault</code></li>
+        <li>User support email — your own address</li>
+        <li><b>User type: External</b></li>
+        <li>Developer contact email — your own address again</li>
+      </ul>
+      <p>Save through to the end of the wizard.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">4</div>
+      <span class="crumb">Google Auth Platform → Audience</span>
+      <h3>Check the test users list</h3>
+      <p>
+        Open the <b>Audience</b> tab. Google often adds the account that created the project
+        as a test user automatically — look for your own email already sitting in the
+        <b>Test users</b> list. If it's there, you're done with this step.
+      </p>
+      <div class="callout gotcha">
+        <span class="icon">⚠️</span>
+        <span><b>If you try to add yourself and get "Ineligible accounts not added":</b>
+        that's not a real error — it almost always means you're already on the list from step 3.
+        Close the dialog and check the list before worrying about it.</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">5</div>
+      <span class="crumb">Google Auth Platform → Clients</span>
+      <h3>Create the OAuth client</h3>
+      <p>
+        Click <b>Clients</b> in the sidebar → <b>+ Create Client</b>.
+      </p>
+      <ul>
+        <li>Application type — <b>Desktop app</b> (not Web application — this matters)</li>
+        <li>Name — anything, e.g. <code>PersonalVault Desktop</code></li>
+      </ul>
+      <p>Click <b>Create</b>, then <b>Download JSON</b> from the dialog that appears.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">6</div>
+      <span class="crumb">File Explorer</span>
+      <h3>Place the file — this part is now automatic</h3>
+      <p>
+        Rename the downloaded file to exactly <code>credentials.json</code>.
+      </p>
+      <ul>
+        <li>Running the portable app? Drop it right next to <code>PersonalVault.exe</code>.</li>
+        <li>Building from source? Put it at <code>%AppData%\PersonalVault\credentials.json</code>.</li>
+      </ul>
+      <div class="callout note">
+        <span class="icon">✨</span>
+        <span>Personal Vault now finds a <code>credentials.json</code> sitting next to its own
+        .exe and copies it into place for you on first launch — you don't have to go find
+        <code>%AppData%</code> yourself.</span>
+      </div>
+      <div class="callout gotcha">
+        <span class="icon">📁</span>
+        <span><b><code>%AppData%</code> is not <code>C:\Users\Default\AppData</code>.</b>
+        "Default" is a hidden Windows template folder, not your account. Type
+        <code>%AppData%\PersonalVault</code> literally into the address bar and Windows
+        resolves it to your own profile automatically.</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">7</div>
+      <span class="crumb">PersonalVault.exe</span>
+      <h3>Run it and connect</h3>
+      <ol>
+        <li>Launch the app and choose your master secret (8+ characters, memorable, never shared with anyone — not even Google).</li>
+        <li>When it asks <i>"Connect Google Drive now?"</i>, click <b>Yes</b>.</li>
+        <li>A browser window opens — sign in with the same Google account from step 1 and click <b>Allow</b>.</li>
+      </ol>
+      <div class="callout done">
+        <span class="icon">✓</span>
+        <span>Done when the tray shows <i>"Signed in to Google Drive."</i> Add an account entry
+        and check <a href="https://drive.google.com" style="color:inherit">drive.google.com</a>
+        for a new file named <code>PersonalVaultData.pvlt</code> — that's your encrypted vault,
+        visible to no one but you.</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="trouble">
+    <h2>Troubleshooting</h2>
+    <div class="sub">The exact snags hit while writing this guide — in case you hit the same ones.</div>
+
+    <div class="qa">
+      <div class="q"><span class="mark">?</span> Will I get charged for this?</div>
+      <div class="a">No. Drive API usage is free for standard use, with a daily quota in the
+      hundreds of millions of requests — a personal vault syncing one small file uses a
+      sliver of that. No billing account is required to reach this point.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="mark">?</span> "Ineligible accounts not added" when adding a test user</div>
+      <div class="a">Almost always means that email is already listed (commonly your own,
+      auto-added when the consent screen was created) — check the <b>Test users</b> list
+      before assuming something's wrong.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="mark">?</span> I can't find the AppData folder</div>
+      <div class="a"><code>%AppData%</code> only resolves correctly when typed into File
+      Explorer's address bar as literal text with the percent signs — it is not a real
+      folder called "AppData" you browse to by hand, and it is never under
+      <code>C:\Users\Default</code>.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="mark">?</span> Sign-in fails or the app says credentials are missing</div>
+      <div class="a">Double-check: the OAuth client was created as <b>Desktop app</b>, not
+      Web application; the downloaded file was renamed to exactly <code>credentials.json</code>
+      (not <code>client_secret_....json</code>); and it's sitting next to
+      <code>PersonalVault.exe</code> or in <code>%AppData%\PersonalVault\</code>.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="mark">?</span> Can I delete this later?</div>
+      <div class="a">Yes — it's entirely your own project. Delete or disable it anytime from
+      <a href="https://console.cloud.google.com" style="color:inherit">console.cloud.google.com</a>
+      without affecting anyone else's vault.</div>
+    </div>
+  </div>
+
+  <footer>
+    <span>Personal Vault — self-service Drive setup</span>
+    <span>Written from a real first run, gotchas included</span>
+  </footer>
+
+</div>

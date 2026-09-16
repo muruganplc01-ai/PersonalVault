@@ -5,7 +5,7 @@ mortgage, insurance, utilities, memberships, car loan, home tax, rental, investm
 etc.) in a single AES-256 encrypted file, keeps that file synced to Google Drive, and
 pops a notification when something is coming due.
 
-This is a working first version, built to be extended - see "What's next" below.
+This is a working v2 - see "What's next" below for what's still just an idea.
 
 ## How it works
 
@@ -32,6 +32,52 @@ This is a working first version, built to be extended - see "What's next" below.
 - **Changing the secret**: tray menu → "Change Master Secret..." re-encrypts the
   *entire* vault file under a brand-new key (and new random salt) in one step, then
   re-uploads it to Drive.
+- **Auto-lock**: after 10 minutes (by default) with no keyboard/mouse activity
+  *anywhere on the system* (not just in this app - the same signal every mainstream
+  password manager uses), the vault locks itself: the window hides if open, and the
+  secret and every decrypted password are dropped from memory. Reopening the vault (or
+  Sync Now / Change Secret) asks for the master secret again before doing anything. You
+  can also lock it immediately yourself via tray menu → "Lock Now". Change the timeout
+  (or disable it) from tray menu → **Settings...**.
+- **Settings UI**: tray menu → "Settings..." edits auto-lock minutes, the due-date
+  reminder windows, and "Start with Windows" - no more hand-editing
+  `%AppData%\PersonalVault\settings.json`.
+- **Profile**: tray menu → "Profile..." (or the "Profile..." button in the account
+  list window) sets your display name and an optional picture. Both are stored only
+  inside the encrypted vault file itself - the picture is never uploaded anywhere
+  separately, so it gets the same protection and the same Drive sync as everything
+  else. Your profile name becomes the default "Owner" on any new account you add
+  (handy once more than one family member's accounts live in the same vault) - you can
+  always override it per account.
+- **Category-specific fields**: click "+ Category Fields" in the account editor to
+  drop in blank labels typical for that category (e.g. APR/term for a car loan,
+  policy/premium for insurance, lease dates for a rental) into the Extra Info box -
+  just fill in the values. This is a convenience on top of the existing free-form
+  key=value fields, not a new data format, so nothing about older entries changes.
+- **Search**: the account list has a live search box that matches across every field -
+  name, institution, owner, username, notes, and any extra field - not just the ones
+  shown as columns.
+- **Import / export**: "Export CSV..." and "Import CSV..." in the account list window
+  read/write a documented CSV format (see the header row `CsvIO.cs` writes) so you can
+  back up outside the vault or bring in accounts from another password manager's CSV
+  export (line up its columns to match, or use this app's own export as a template).
+  **An exported CSV is plain, unencrypted text** - every password readable in the
+  clear - so treat it as sensitive and delete it once you're done with it.
+- **Clipboard auto-clear**: after copying a username or password, the clipboard clears
+  itself automatically about 20 seconds later (only if you haven't copied something
+  else in the meantime).
+- **Rolling Drive backups**: each successful sync pins the revision it just uploaded
+  and prunes anything older than the last 5, using Google Drive's own revision
+  history - so an accidental delete, a bad edit, or a botched sync has a recent copy to
+  recover from (via Drive's web UI → right-click the file → "Manage versions"). This is
+  best-effort and never blocks or fails a sync.
+- **Rich notifications**: due-date alerts, lock notices, and sync status use real
+  Windows action-center toasts (via `Microsoft.Toolkit.Uwp.Notifications`) with an
+  "Open Vault" button, when Windows will let this unpackaged app register for them.
+  AUMID/COM registration for a plain WinForms app (not an installed/MSIX app) is known
+  to be finicky across Windows versions, so every toast call is wrapped in a fallback:
+  if it doesn't work on your PC, you silently get the same tray balloon tips as before
+  instead of anything breaking.
 
 ## Project layout
 
@@ -39,20 +85,29 @@ This is a working first version, built to be extended - see "What's next" below.
 PersonalVault.sln
 PersonalVault/
   Program.cs                 Entry point (single-instance mutex, starts the tray context)
-  Models/AccountEntry.cs     Account record + category/recurrence enums
-  Models/VaultData.cs        The full vault (list of accounts)
+  Models/AccountEntry.cs     Account record + category/recurrence enums + CategoryFieldSpec (suggested fields per category)
+  Models/VaultData.cs        The full vault (accounts + profile)
+  Models/VaultProfile.cs     The vault owner's display name + optional picture
   Security/VaultCrypto.cs    AES-256-GCM encrypt/decrypt + PBKDF2 key derivation
   Storage/VaultStorage.cs    JSON <-> encrypted bytes <-> vault.pvlt on disk
-  Storage/GoogleDriveSync.cs Google Drive OAuth + upload/download
+  Storage/GoogleDriveSync.cs Google Drive OAuth + upload/download + rolling revision backups
   Storage/AppPaths.cs        All file/folder locations (under %AppData%\PersonalVault)
-  Storage/AppSettings.cs     Small non-secret settings (reminder days, cached Drive file id)
-  Services/DueDateNotifier.cs   Due-date scanning + tray notifications
+  Storage/AppSettings.cs     Small non-secret settings (reminder days, cached Drive file id, auto-lock timeout)
+  Services/DueDateNotifier.cs   Due-date scanning + notifications
+  Services/ToastNotifier.cs     Rich toast notifications, with fallback to tray balloons
+  Services/ToastActivator.cs    COM callback Windows uses when a toast is clicked
   Forms/UnlockForm.cs         Enter/create the master secret
-  Forms/MainForm.cs           Account list (add/edit/delete/copy)
-  Forms/AccountEditForm.cs    Add/edit a single account
+  Forms/MainForm.cs           Account list (search, add/edit/delete/copy, export/import, profile)
+  Forms/AccountEditForm.cs    Add/edit a single account, incl. category-specific suggested fields
+  Forms/ProfileForm.cs        Edit the vault owner's name/picture
+  Forms/SettingsForm.cs       Edit AutoLockMinutes / reminder days / Start with Windows
   Forms/ChangeSecretForm.cs   Change the master secret
   Forms/TrayApplicationContext.cs   Owns the tray icon and ties everything together
   Utils/StartupManager.cs     "Start with Windows" via the per-user Run registry key
+  Utils/CredentialBootstrap.cs   Auto-copies a bundled credentials.json into %AppData% on first run
+  Utils/SystemIdleTime.cs     Reads system-wide idle time (Win32 GetLastInputInfo) for auto-lock
+  Utils/CsvIO.cs              CSV export/import for accounts
+  Resources/AppIcon.ico       App/tray icon (embedded into the .exe via <ApplicationIcon>)
 ```
 
 ## Building
@@ -106,45 +161,144 @@ If you'd rather not deal with Google Cloud Console at all yet, you can skip this
 entirely - the app works fully offline against the local encrypted file, and you can
 wire up Drive later.
 
+## Sharing this with family members
+
+Each person should get their **own private vault** (own master secret, own accounts,
+own Drive file) - nobody else's passwords are visible to them, even though everyone's
+running the same app. Setup for this:
+
+1. **One Google Cloud project covers the whole family** - you don't need to repeat the
+   Google Cloud Console steps per person. In the same project you already created, go
+   to **Google Auth Platform → Audience → Test users → Add users**, and add each family
+   member's own Gmail address there (up to 100). That's the only step that truly can't
+   be automated - Google requires each person's own account to be explicitly allowed.
+2. **Build a portable, self-contained copy** so they don't need Visual Studio or the
+   .NET SDK installed. From a command prompt in the `PersonalVault` project folder:
+   ```
+   dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+   ```
+   This produces a `publish\` folder with `PersonalVault.exe` and everything it needs
+   bundled in (it'll be ~100-150 MB - that's the .NET runtime included, which is why no
+   separate install step is needed on their PC).
+3. **Copy your `credentials.json` into that same `publish\` folder**, right next to
+   `PersonalVault.exe`. This is safe to share - it only identifies the *app* to Google,
+   it is not a credential to your data, and each person still authorizes with their own
+   Google account and gets their own separate Drive file.
+4. **Zip the `publish\` folder** and send it to them (email, USB drive, shared folder -
+   however you'd share any file). They unzip it anywhere and double-click
+   `PersonalVault.exe` - no install, no admin rights needed.
+5. On first launch, the app automatically copies the bundled `credentials.json` into
+   their own `%AppData%\PersonalVault\` the moment it sees one sitting next to the
+   .exe - they never have to find that folder or copy anything by hand. After they
+   create their master secret, it directly asks "Connect Google Drive now?" - clicking
+   Yes pops the same one-time Google sign-in browser window you saw, just for their own
+   account.
+6. From there their vault, their Drive file, and their secret are entirely their own -
+   completely separate from yours, even though you both got the app from the same zip.
+
+If you'd rather build a polished installer (Start Menu shortcut, uninstaller) instead
+of a portable folder, that's possible with a tool like
+[Inno Setup](https://jrsoftware.org/isinfo.php), but needs its own separate setup script
+- ask if you want help writing one.
+
 ## First run
 
-1. Build and run the app. It creates `%AppData%\PersonalVault\` and asks you to choose
-   a master secret (minimum 8 characters - use something long and memorable; this is
-   the only thing standing between anyone and every password you store).
-2. It opens the (initially empty) account list. Click **Add Account** to add your
-   first bank/credit card/mortgage/etc. entry.
-3. Optionally sign in to Google Drive (see above) so the encrypted file also lives
-   there.
+1. Build and run the app. If it finds no vault file yet and a `credentials.json` is
+   already present, it first asks whether to sign in to Google Drive and check for an
+   **existing backup** before creating anything new - see "Disaster recovery" below.
+   Assuming there isn't one (the normal case for a truly first run), it then creates
+   `%AppData%\PersonalVault\` and asks you to choose a master secret (minimum 8
+   characters - use something long and memorable; this is the only thing standing
+   between anyone and every password you store).
+2. If a `credentials.json` is present but you weren't signed in yet, the app asks
+   right away whether to connect Google Drive - one click, one browser sign-in, done.
+3. It opens the (initially empty) account list. Click **Add Account** to add your
+   first bank/credit card/mortgage/etc. entry, or **Profile...** first to set your name
+   and picture (this becomes the default "Owner" on new accounts).
 4. The app minimizes to the tray on close and keeps running; right-click the tray icon
-   for Sync Now / Sign in / Change Secret / Start with Windows / Exit.
+   for Open Vault / Profile / Sync Now / Sign in / Lock Now / Change Secret / Settings /
+   Start with Windows / Exit.
 
-## Known limitations (v1 - flagged deliberately, not hidden)
+## Disaster recovery (new PC, reinstall, or a wiped/replaced drive)
 
-- **Not yet build-verified on Windows** - see "Building" above.
-- The master secret lives in memory only while the app runs; there's no auto-lock
-  timer yet, so if you walk away while it's unlocked, anyone at your PC can open the
-  vault window. (Locking Windows itself still protects you, same as any other app.)
-- Clipboard copies of usernames/passwords are **not** auto-cleared after a delay yet.
+If something happens to this PC, your encrypted vault file (`PersonalVaultData.pvlt`)
+is still sitting in the root of your Google Drive's **My Drive** - it's uploaded there
+every time you save (add/edit/delete an account, edit your profile, change the master
+secret), as long as you were signed in to Google Drive at the time.
+
+**Two things need to survive the PC dying for this to work** - the vault itself (that's
+what Drive already takes care of automatically) and a copy of `credentials.json`,
+since the app needs that just to sign in to Drive at all - it isn't backed up by the
+app anywhere, and a brand-new PC won't have it yet. Unlike the vault, this one is easy
+to get back regardless: since you created it yourself in Google Cloud Console, it's
+still sitting in your Google account no matter what happens to any PC - go to
+console.cloud.google.com → your project → **APIs & Services → Credentials** → click
+the OAuth Client ID you made → **Download JSON** any time you need a fresh copy. (This
+file only identifies the *app* to Google, not a credential to your data, so it's also
+fine to just keep a spare copy off this PC too - e.g. emailed to yourself or on a USB
+stick - if you'd rather not depend on remembering the Cloud Console steps under
+pressure.) The master secret itself still has to come from your memory either way -
+there's no recovery path for that by design.
+
+To get back to business on a different (or freshly reinstalled) PC:
+
+1. Install the app there (see "Sharing this with family members" above for the
+   portable-copy option, or build it fresh) and put a `credentials.json` in place -
+   re-download it from Google Cloud Console as above if you don't have a spare copy
+   handy (either shipped alongside the .exe, or placed per "One-time setup" above).
+2. Run it. Since there's no local vault yet, it asks to sign in to Google Drive and
+   check for an existing backup **before** offering to create a new, empty one.
+3. Sign in with the same Google account the original vault was synced to. If a backup
+   is found, it asks to restore it - say yes, then enter the **same master secret**
+   the original vault used.
+4. That's it - the restored vault is saved locally on this PC too, and syncing
+   continues from here exactly as before.
+
+If you say no at any of those prompts (or there's no backup found), the app falls back
+to creating a brand-new, empty vault instead - so nothing forces you through recovery
+if you genuinely want a fresh start.
+
+## Known limitations (flagged deliberately, not hidden)
+
+- **Not yet build-verified on Windows** - see "Building" above. This batch in
+  particular bumps the target framework to a Windows-10-SDK-versioned TFM
+  (`net8.0-windows10.0.19041.0`) for the toast notification library - budget extra time
+  for a first build/fix pass, and see the toast-notification note below.
+- Auto-lock (10 min idle by default, see "How it works" above) covers walking away from
+  an unlocked PC, but the secret is still a plain in-memory `string` while unlocked -
+  .NET strings are immutable and the GC doesn't scrub freed memory, so this isn't
+  hardened against a memory-dump attack. Good enough for a personal machine; not
+  something to rely on if the PC itself isn't trusted.
 - Drive sync is last-write-wins with no merge or conflict UI - if you edit the vault
   on two machines before syncing between them, the later save overwrites the earlier
-  one's changes.
-- The tray icon is a placeholder system icon (`SystemIcons.Shield`) - swap in a real
-  `.ico` under `Resources\` and wire it into the `.csproj` / `TrayApplicationContext`.
-- Notifications are basic tray balloons, not rich Windows 10/11 action-center toasts.
-- No search/filter/sort beyond "sorted by due date" in the account list yet.
+  one's changes. (The rolling backup feature gives you a way to recover an overwritten
+  version from Drive's revision history, but won't merge changes automatically.)
+- Rich toast notifications depend on Windows letting an unpackaged app register an
+  AUMID and COM activator - this is known to be finicky and could not be tested from
+  this build environment. If it doesn't work on a given PC, notifications silently fall
+  back to the same tray balloons used before; nothing breaks either way. One related
+  gap: if Windows relaunches the app fresh from a toast click after it was fully
+  closed, that specific click may be missed (not an issue for the normal "always
+  running in the tray" use case).
+- CSV import/export uses this app's own column format, not automatic detection of any
+  specific third-party password manager's export - you may need to rename columns to
+  match.
+- Category-specific fields are suggested placeholders you insert with a button, not
+  enforced required fields - nothing stops you from leaving them blank or renaming
+  them.
 
 ## What's next (ideas, not started)
 
-- Auto-lock after N minutes idle; require re-entering the secret to unlock again.
-- Auto-clear clipboard a few seconds after copying a password.
-- Rich toast notifications (via `Microsoft.Toolkit.Uwp.Notifications` or the
-  Windows App SDK) with an "Open Vault" action button.
-- Keep the last few versions of the vault on Drive (simple rolling backup) instead of
-  overwriting in place, in case of accidental deletes or bad syncs.
-- Import/export (e.g. from a CSV or another password manager) and full-text search.
-- A real custom tray/app icon.
-- Category-specific fields (e.g. loan APR/term for CarLoan/Mortgage, premium/renewal
-  for Insurance) instead of the generic key=value "extra fields" box.
+- Build/fix pass on a real Windows machine, especially around the toast notification
+  registration (see "Known limitations").
+- Automatic conflict handling for Drive sync (currently last-write-wins).
+- Recognizing common export formats from other password managers directly (currently
+  you line up columns to this app's own CSV schema).
+- A "Restore from backup" UI that lists and restores prior Drive revisions from inside
+  the app, instead of via Drive's own web UI.
+- Packaging as an MSIX or a proper installer (Start Menu shortcut, uninstaller) instead
+  of a portable folder, which would also make toast notification registration more
+  reliable.
 
-This is meant as a solid, working starting point - tell me what to build on next
-(any of the above, or something else) and we'll keep going.
+This is meant as a solid, working v2 - tell me what to build on next (any of the
+above, or something else) and we'll keep going.

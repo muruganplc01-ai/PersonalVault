@@ -2,20 +2,24 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <!--
+      Bumped from plain net8.0-windows to a Windows-10-SDK-versioned TFM so the app can
+      call the WinRT toast notification APIs (via Microsoft.Toolkit.Uwp.Notifications) -
+      that library needs a target that carries the Windows 10 API contracts. 19041 is
+      Windows 10 2004 (May 2020 update); if you're building for older Windows 10, this
+      can be lowered to 10.0.17763.0 (1809) instead, the toolkit's own minimum.
+    -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>PersonalVault</AssemblyName>
     <RootNamespace>PersonalVault</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Authors>You</Authors>
     <Product>Personal Vault</Product>
-    <!--
-      This is a first cut. To customize the tray icon later, add a .ico file under
-      Resources\ and uncomment the line below.
-    -->
-    <!-- <ApplicationIcon>Resources\vault.ico</ApplicationIcon> -->
+    <ApplicationIcon>Resources\AppIcon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -26,6 +30,28 @@
       only uses stable, long-standing APIs from this package.
     -->
     <PackageReference Include="Google.Apis.Drive.v3" Version="1.68.0.3511" />
+
+    <!--
+      Rich Windows toast notifications with action buttons. If this exact version isn't
+      available when you restore, run:
+        dotnet add package Microsoft.Toolkit.Uwp.Notifications
+      Services/ToastNotifier.cs wraps every call to this in try/catch and falls back to
+      the plain tray balloon tip on any failure, so a problem here (e.g. toast
+      registration issues on a given machine) degrades gracefully instead of crashing.
+    -->
+    <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      ApplicationIcon above embeds this into the built .exe (Explorer/taskbar icon).
+      Also copying it to the output folder as a loose file is just a safety net -
+      TrayApplicationContext.LoadTrayIcon() normally pulls the icon back out of the .exe
+      itself, and only falls back to this loose copy if that somehow fails.
+    -->
+    <Content Include="Resources\AppIcon.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

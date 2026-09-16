@@ -29,6 +29,35 @@ public enum RecurrenceType
 }
 
 /// <summary>
+/// Suggested extra-field labels per category, e.g. APR/term for a loan, policy/premium
+/// for insurance. These are just the keys AccountEditForm pre-populates into
+/// ExtraFields for a given category - not a schema change, so older vault files with
+/// arbitrary ExtraFields keys keep working exactly as before, and any field can still
+/// be renamed or removed freely in the edit form.
+/// </summary>
+public static class CategoryFieldSpec
+{
+    public static readonly IReadOnlyDictionary<AccountCategory, string[]> SuggestedFields =
+        new Dictionary<AccountCategory, string[]>
+        {
+            [AccountCategory.BankAccount] = new[] { "Routing Number", "Account Type" },
+            [AccountCategory.CreditCard] = new[] { "Credit Limit", "APR (%)", "Rewards Program" },
+            [AccountCategory.Mortgage] = new[] { "Loan Amount", "Interest Rate (%)", "Term (years)", "Lender Contact" },
+            [AccountCategory.CarLoan] = new[] { "Loan Amount", "APR (%)", "Term (months)", "Lender Contact" },
+            [AccountCategory.Insurance] = new[] { "Policy Number", "Premium Amount", "Coverage Type" },
+            [AccountCategory.Utility] = new[] { "Meter / Account #", "Provider", "Service Address" },
+            [AccountCategory.Membership] = new[] { "Membership ID", "Plan / Tier", "Renewal Fee" },
+            [AccountCategory.HomeTax] = new[] { "Parcel / Property ID", "Assessed Value", "Tax Authority" },
+            [AccountCategory.ApartmentRental] = new[] { "Lease Start", "Lease End", "Monthly Rent", "Landlord Contact" },
+            [AccountCategory.Investment] = new[] { "Account Type (401k/IRA/Brokerage)", "Advisor Contact" },
+            [AccountCategory.Other] = Array.Empty<string>(),
+        };
+
+    public static string[] For(AccountCategory category) =>
+        SuggestedFields.TryGetValue(category, out var fields) ? fields : Array.Empty<string>();
+}
+
+/// <summary>
 /// A single stored account/credential record. Everything here is written to the
 /// encrypted vault file as-is (see Storage/VaultStorage.cs) - nothing in this class
 /// is persisted anywhere unencrypted.
@@ -44,6 +73,9 @@ public class AccountEntry
 
     /// <summary>e.g. "Chase Bank", "State Farm", "City of Austin Utilities".</summary>
     public string Institution { get; set; } = string.Empty;
+
+    /// <summary>Whose account this is - defaults to the vault profile's name for new entries, editable per-entry.</summary>
+    public string Owner { get; set; } = string.Empty;
 
     public string UserName { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;

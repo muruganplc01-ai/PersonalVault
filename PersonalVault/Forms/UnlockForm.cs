@@ -6,7 +6,10 @@ namespace PersonalVault.Forms;
 public enum UnlockMode
 {
     UnlockExisting,
-    CreateNew
+    CreateNew,
+
+    /// <summary>Unlocking a vault just downloaded from Google Drive (disaster-recovery path) - same secret entry as UnlockExisting, different wording.</summary>
+    RestoreFromBackup
 }
 
 /// <summary>
@@ -27,7 +30,12 @@ public class UnlockForm : Form
     {
         Mode = mode;
 
-        Text = mode == UnlockMode.CreateNew ? "Create Your Master Secret" : "Unlock Personal Vault";
+        Text = mode switch
+        {
+            UnlockMode.CreateNew => "Create Your Master Secret",
+            UnlockMode.RestoreFromBackup => "Restore Vault from Google Drive",
+            _ => "Unlock Personal Vault"
+        };
         Width = 420;
         Height = mode == UnlockMode.CreateNew ? 300 : 220;
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -41,10 +49,16 @@ public class UnlockForm : Form
             Width = 380,
             Height = 50,
             Location = new Point(15, 12),
-            Text = mode == UnlockMode.CreateNew
-                ? "Choose a master secret. It encrypts everything in this vault and is never " +
-                  "stored anywhere. If you lose it, your data cannot be recovered."
-                : "Enter your master secret to unlock the vault."
+            Text = mode switch
+            {
+                UnlockMode.CreateNew =>
+                    "Choose a master secret. It encrypts everything in this vault and is never " +
+                    "stored anywhere. If you lose it, your data cannot be recovered.",
+                UnlockMode.RestoreFromBackup =>
+                    "Enter the master secret this backup was created with (the same one you used " +
+                    "on the original PC).",
+                _ => "Enter your master secret to unlock the vault."
+            }
         };
         Controls.Add(prompt);
 

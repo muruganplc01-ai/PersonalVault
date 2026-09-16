@@ -16,6 +16,15 @@ public class AppSettings
     /// <summary>Cached Google Drive file id for the vault, so we don't have to search every time.</summary>
     public string? DriveFileId { get; set; }
 
+    /// <summary>Cached Google Drive file id for the payments file, so we don't have to search every time.</summary>
+    public string? PaymentsDriveFileId { get; set; }
+
+    /// <summary>
+    /// Minutes of no keyboard/mouse activity anywhere on the system before the vault
+    /// auto-locks and the secret has to be re-entered. 0 disables auto-lock.
+    /// </summary>
+    public int AutoLockMinutes { get; set; } = 10;
+
     public static AppSettings Load()
     {
         try
