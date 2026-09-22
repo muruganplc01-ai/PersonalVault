@@ -117,7 +117,6 @@ PersonalVault/
   Models/SharedAccountPayload.cs What's actually encrypted and sent for a shared account
   Security/ShareCrypto.cs    AES-256-GCM for a shared account, random per-share key (no password)
   Storage/SharesStorage.cs   Load/save shares.json (the SharedLink list)
-  Storage/ShareConfig.cs     One-time setup constant: your GitHub Pages viewer URL
   Services/ShareExpiryService.cs Background sweep that revokes expired share links
   Utils/StartupManager.cs     "Start with Windows" via the per-user Run registry key
   Utils/CredentialBootstrap.cs   Auto-copies a bundled credentials.json into %AppData% on first run
@@ -246,20 +245,26 @@ anyone but the recipient ever sees it.
    This key can then only ever be used to read bytes of Drive files that are *already*
    shared "anyone with the link" - never anything private - so it being visible in the
    page's own source (unavoidable for a page with no backend) is expected and safe.
-3. **Paste both into place:**
-   - Open `docs/share/index.html`, find `DRIVE_API_KEY = "YOUR-RESTRICTED-DRIVE-API-KEY"`
-     near the top of the `<script>`, and replace it with the key from step 2. Commit and
-     push - GitHub Pages redeploys automatically.
-   - Open `PersonalVault/Storage/ShareConfig.cs` and set `ViewerBaseUrl` to your Pages
-     URL from step 1 plus `share/` (e.g. `https://yourusername.github.io/PersonalVault/share/`).
-     Rebuild the app.
+3. **Paste the API key into the viewer page:** open `docs/share/index.html`, find
+   `DRIVE_API_KEY = "YOUR-RESTRICTED-DRIVE-API-KEY"` near the top of the `<script>`,
+   and replace it with the key from step 2. Commit and push - GitHub Pages redeploys
+   automatically.
+4. **Set your GitHub username in the app:** tray menu (or the account list window) ->
+   **Profile...** -> **GitHub username (for Share links)** -> enter the same username
+   from your Pages URL in step 1 -> **Save**. This is stored in your local settings and
+   is what the app uses to build `https://<username>.github.io/PersonalVault/share/`
+   links - no rebuild needed, and it follows the vault to a new PC during disaster
+   recovery (see "Disaster recovery" below). It assumes the repo stays named
+   `PersonalVault` with Pages served from `/docs`, matching step 1 - if you forked or
+   renamed the repo, the link the app builds won't match your real Pages URL.
 
 **Using it:** in the account list window, select an account -> **Share...** -> pick how
 long the link should stay live -> **Create Link**. The link is copied to your clipboard
 automatically. Anyone who opens it sees that one account's details in their browser and
 can copy any field - no Personal Vault install, no Google account, no sign-in needed on
 their end. Manage or immediately kill an active link anytime from the tray menu's
-**Shared Links...**.
+**Shared Links...**. If your GitHub username isn't set yet, **Share...** tells you to
+set it from Profile first instead of failing silently.
 
 **Known limitations of this feature specifically** (see also "Known limitations" below):
 
@@ -334,6 +339,13 @@ To get back to business on a different (or freshly reinstalled) PC:
    the original vault used.
 4. That's it - the restored vault is saved locally on this PC too, and syncing
    continues from here exactly as before.
+5. Preferences also come back automatically at this point (`LoadOrRestoreSettingsAsync`
+   pulls `settings.json` from Drive the moment this PC has no local copy yet) - auto-lock
+   minutes, due-date reminder windows, and your **GitHub username** (so Share Account
+   links keep working immediately, with nothing to re-type). The one exception is
+   "Default browser," which is deliberately left as this new PC's own value rather than
+   copied from the old one, since a specific browser's install path only means something
+   on the machine it's installed on.
 
 If you say no at any of those prompts (or there's no backup found), the app falls back
 to creating a brand-new, empty vault instead - so nothing forces you through recovery

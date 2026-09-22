@@ -7,9 +7,14 @@ using PersonalVault.Models;
 namespace PersonalVault.Forms;
 
 /// <summary>
-/// Edits the vault owner's display name and picture (VaultData.Profile). Both are
-/// mutated directly on the passed-in VaultProfile when the user clicks Save - same
-/// "mutate in place, caller decides whether to persist" pattern as AccountEditForm.
+/// Edits the vault owner's display name and picture (VaultData.Profile), plus two
+/// per-machine AppSettings fields (default browser, GitHub username for Share Account
+/// links) that live alongside the profile in this same window for convenience even
+/// though they aren't part of VaultProfile itself. Name/picture are mutated directly on
+/// the passed-in VaultProfile when the user clicks Save - same "mutate in place, caller
+/// decides whether to persist" pattern as AccountEditForm; the AppSettings fields come
+/// back out via SelectedBrowserPath/GitHubUsername for the caller to persist instead,
+/// since this form has no direct access to AppSettings.
 ///
 /// The picture never leaves this app except inside the encrypted vault file itself -
 /// there is deliberately no separate upload of it anywhere.
@@ -33,6 +38,7 @@ public class ProfileForm : Form
     };
     private readonly TextBox _nameBox = new() { Location = new Point(20, 182), Width = 340 };
     private readonly TextBox _browserPathBox = new() { Location = new Point(20, 268), Width = 250, ReadOnly = true };
+    private readonly TextBox _gitHubUsernameBox = new() { Location = new Point(20, 350), Width = 250 };
 
     /// <summary>
     /// The chosen default-browser .exe path, or null to mean "use Windows' normal
@@ -43,13 +49,16 @@ public class ProfileForm : Form
     /// </summary>
     public string? SelectedBrowserPath { get; private set; }
 
-    public ProfileForm(VaultProfile profile, string? currentDefaultBrowserPath = null)
+    /// <summary>Same pattern as SelectedBrowserPath, for AppSettings.GitHubUsername.</summary>
+    public string? GitHubUsername { get; private set; }
+
+    public ProfileForm(VaultProfile profile, string? currentDefaultBrowserPath = null, string? currentGitHubUsername = null)
     {
         _profile = profile;
 
         Text = "Your Profile";
         Width = 400;
-        Height = 390;
+        Height = 470;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MaximizeBox = false;
@@ -91,8 +100,21 @@ public class ProfileForm : Form
         Controls.Add(browseBrowserBtn);
         Controls.Add(useSystemDefaultBtn);
 
-        var cancelButton = new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel, Location = new Point(230, 335) };
-        var saveButton = new Button { Text = "Save", AutoSize = true, Location = new Point(315, 335) };
+        Controls.Add(new Label { Text = "GitHub username (for Share links):", AutoSize = true, Location = new Point(20, 330) });
+        Controls.Add(_gitHubUsernameBox);
+        Controls.Add(new Label
+        {
+            Text = "Used to build \"Share Account\" links: https://<username>.github.io/PersonalVault/share/. " +
+                   "Leave blank to disable the Share... button. See README for one-time GitHub Pages setup.",
+            AutoSize = false,
+            Location = new Point(20, 372),
+            Width = 350,
+            Height = 40,
+            ForeColor = Color.DimGray
+        });
+
+        var cancelButton = new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel, Location = new Point(230, 420) };
+        var saveButton = new Button { Text = "Save", AutoSize = true, Location = new Point(315, 420) };
         saveButton.Click += SaveButton_Click;
         Controls.Add(cancelButton);
         Controls.Add(saveButton);
@@ -102,6 +124,7 @@ public class ProfileForm : Form
 
         _nameBox.Text = _profile.Name;
         _browserPathBox.Text = currentDefaultBrowserPath ?? string.Empty;
+        _gitHubUsernameBox.Text = currentGitHubUsername ?? string.Empty;
         if (_profile.HasPicture)
         {
             try
@@ -167,6 +190,9 @@ public class ProfileForm : Form
 
         var browserPath = _browserPathBox.Text.Trim();
         SelectedBrowserPath = string.IsNullOrEmpty(browserPath) ? null : browserPath;
+
+        var gitHubUsername = _gitHubUsernameBox.Text.Trim();
+        GitHubUsername = string.IsNullOrEmpty(gitHubUsername) ? null : gitHubUsername;
 
         DialogResult = DialogResult.OK;
     }

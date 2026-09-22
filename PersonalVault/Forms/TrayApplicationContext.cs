@@ -176,9 +176,11 @@ public class TrayApplicationContext : ApplicationContext
         if (!EnsureUnlocked()) return;
         if (_vault == null) return;
 
-        using var form = new ProfileForm(_vault.Profile);
+        using var form = new ProfileForm(_vault.Profile, _settings.DefaultBrowserPath, _settings.GitHubUsername);
         if (form.ShowDialog() == DialogResult.OK)
         {
+            SetDefaultBrowserPath(form.SelectedBrowserPath);
+            SetGitHubUsername(form.GitHubUsername);
             SaveVault();
             _mainForm?.RefreshData(_vault);
         }
@@ -205,6 +207,9 @@ public class TrayApplicationContext : ApplicationContext
     {
         if (!_drive.IsAuthenticated)
             throw new InvalidOperationException("Sign in to Google Drive first (tray menu -> Sign in to Google Drive) - sharing needs somewhere to host the encrypted link.");
+
+        if (string.IsNullOrWhiteSpace(_settings.GitHubUsername))
+            throw new InvalidOperationException("Set your GitHub username first (Profile...) - the share link points at your GitHub Pages viewer page, which needs to know whose Pages site to use.");
 
         var expiresUtc = DateTime.UtcNow.Add(lifetime);
         var payload = new SharedAccountPayload
@@ -250,7 +255,12 @@ public class TrayApplicationContext : ApplicationContext
 
         string keyBase64Url = Convert.ToBase64String(key).Replace('+', '-').Replace('/', '_').TrimEnd('=');
         long expUnixSeconds = ((DateTimeOffset)expiresUtc).ToUnixTimeSeconds();
-        return $"{ShareConfig.ViewerBaseUrl}#id={Uri.EscapeDataString(driveFileId)}&key={keyBase64Url}&exp={expUnixSeconds}";
+
+        // Assumes the repo stays named "PersonalVault" with GitHub Pages served from
+        // /docs at the default branch's root - see README.md's "Sharing an account"
+        // section for the one-time Pages setup this depends on.
+        string viewerBaseUrl = $"https://{_settings.GitHubUsername}.github.io/PersonalVault/share/";
+        return $"{viewerBaseUrl}#id={Uri.EscapeDataString(driveFileId)}&key={keyBase64Url}&exp={expUnixSeconds}";
     }
 
     /// <summary>
@@ -676,6 +686,8 @@ public class TrayApplicationContext : ApplicationContext
                 BackfillPayments,
                 () => _settings.DefaultBrowserPath,
                 SetDefaultBrowserPath,
+                () => _settings.GitHubUsername,
+                SetGitHubUsername,
                 ShareAccountAsync);
             _mainForm.FormClosing += (_, e) =>
             {
@@ -917,6 +929,19 @@ public class TrayApplicationContext : ApplicationContext
     }
 
     /// <summary>
+    /// Called from ProfileForm (Save) when the "GitHub username" field changed. Unlike
+    /// SetDefaultBrowserPath, this goes through SaveSettings() the same way but the
+    /// value it sets IS meant to follow the vault to a new PC - see
+    /// AppSettings.GitHubUsername and LoadOrRestoreSettingsAsync below.
+    /// </summary>
+    private void SetGitHubUsername(string? username)
+    {
+        DebugLog.Write($"SetGitHubUsername: {(string.IsNullOrEmpty(username) ? "(cleared)" : username)}.");
+        _settings.GitHubUsername = username;
+        SaveSettings();
+    }
+
+    /// <summary>
     /// Call this (instead of _settings.Save() directly) whenever the USER actually
     /// changed a preference - auto-lock, reminder days, start-with-Windows, default
     /// browser - so it also gets backed up to Drive as part of disaster recovery.
@@ -966,6 +991,10 @@ public class TrayApplicationContext : ApplicationContext
     /// is a property of a specific PC, not something that should follow the vault to a
     /// different machine, so this PC keeps whatever it already has for that one field
     /// (empty/system-default on a truly fresh install) while adopting everything else.
+    /// GitHubUsername is the opposite case: it identifies a GitHub account, not a PC, so
+    /// (unlike DefaultBrowserPath) it IS restored here - a brand-new PC set up via
+    /// disaster recovery gets Share Account links working immediately, with no need to
+    /// re-type the username from Profile.
     /// </summary>
     private async Task LoadOrRestoreSettingsAsync()
     {
@@ -985,6 +1014,7 @@ public class TrayApplicationContext : ApplicationContext
             _settings.AutoLockMinutes = remoteSettings.AutoLockMinutes;
             _settings.DriveFileId ??= remoteSettings.DriveFileId;
             _settings.PaymentsDriveFileId ??= remoteSettings.PaymentsDriveFileId;
+            _settings.GitHubUsername ??= remoteSettings.GitHubUsername;
             // DefaultBrowserPath intentionally left as this PC's own value - see doc comment above.
 
             _settingsDriveFileId = remoteId;

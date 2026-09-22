@@ -21,6 +21,8 @@ public class MainForm : Form
     private readonly Action<AccountEntry, decimal, DateTime, int, RecurrenceType> _backfillPayments;
     private readonly Func<string?> _getDefaultBrowserPath;
     private readonly Action<string?> _setDefaultBrowserPath;
+    private readonly Func<string?> _getGitHubUsername;
+    private readonly Action<string?> _setGitHubUsername;
     private readonly Func<AccountEntry, TimeSpan, Task<string>> _shareAccount;
     private readonly ListView _listView;
     private readonly TextBox _searchBox;
@@ -83,6 +85,8 @@ public class MainForm : Form
         Action<AccountEntry, decimal, DateTime, int, RecurrenceType> backfillPayments,
         Func<string?> getDefaultBrowserPath,
         Action<string?> setDefaultBrowserPath,
+        Func<string?> getGitHubUsername,
+        Action<string?> setGitHubUsername,
         Func<AccountEntry, TimeSpan, Task<string>> shareAccount)
     {
         _vault = vault;
@@ -93,6 +97,8 @@ public class MainForm : Form
         _backfillPayments = backfillPayments;
         _getDefaultBrowserPath = getDefaultBrowserPath;
         _setDefaultBrowserPath = setDefaultBrowserPath;
+        _getGitHubUsername = getGitHubUsername;
+        _setGitHubUsername = setGitHubUsername;
         _shareAccount = shareAccount;
 
         Text = "Personal Vault";
@@ -971,10 +977,11 @@ public class MainForm : Form
 
     private void EditProfile()
     {
-        using var form = new ProfileForm(_vault.Profile, _getDefaultBrowserPath());
+        using var form = new ProfileForm(_vault.Profile, _getDefaultBrowserPath(), _getGitHubUsername());
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             _setDefaultBrowserPath(form.SelectedBrowserPath);
+            _setGitHubUsername(form.GitHubUsername);
             _save();
             ApplyFilter(); // Owner column defaults may be worth re-checking after a name change, cheap to just refresh.
         }

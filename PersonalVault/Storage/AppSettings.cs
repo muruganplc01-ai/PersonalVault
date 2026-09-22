@@ -23,6 +23,18 @@ public class AppSettings
     public string? SettingsDriveFileId { get; set; }
 
     /// <summary>
+    /// Set from the Profile form's "GitHub username" field. Used to build "Share
+    /// Account" links (see TrayApplicationContext.ShareAccountAsync) as
+    /// "https://{GitHubUsername}.github.io/PersonalVault/share/#...", assuming the repo
+    /// stays named "PersonalVault" and its GitHub Pages site is served from /docs at the
+    /// default branch's root - see README.md's "Sharing an account" section. Unlike
+    /// DefaultBrowserPath, this IS restored from Drive during disaster recovery (see
+    /// LoadOrRestoreSettingsAsync) - it identifies your GitHub account, not this PC, so
+    /// it should follow the vault to a new machine instead of needing to be re-typed.
+    /// </summary>
+    public string? GitHubUsername { get; set; }
+
+    /// <summary>
     /// Full path to a specific browser .exe to use for "Open URL" (Accounts tab) and the
     /// Website "Open" button (Account Details), set from the Profile form. Null/empty
     /// means use Windows' normal system default browser. This is a per-machine
