@@ -26,6 +26,16 @@ public class GoogleDriveSync
     /// <summary>Separate Drive file for payment history (see PaymentsStorage) - same account, same drive.file scope, just a different file name.</summary>
     public const string RemotePaymentsFileName = "PersonalVaultPayments.pvlt";
 
+    /// <summary>Separate Drive file for local preferences (see AppSettings) - same account, same drive.file scope, just a different file name.</summary>
+    public const string RemoteSettingsFileName = "PersonalVaultSettings.json";
+
+    /// <summary>
+    /// Every "Share Account" upload (see ShareCrypto/SharesStorage) gets its own Drive
+    /// file, named "{ShareFilePrefix}{a fresh Guid}.bin" - one file per share, so
+    /// revoking/expiring one never touches any other active share.
+    /// </summary>
+    public const string ShareFilePrefix = "PersonalVaultShare-";
+
     private DriveService? _service;
 
     public bool IsAuthenticated => _service != null;
@@ -248,6 +258,74 @@ public class GoogleDriveSync
         {
             DebugLog.WriteException("UploadOrUpdateAsync", ex);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Uploads a brand-new, publicly-link-readable Drive file for the "Share Account"
+    /// feature - always a Files.Create (unlike UploadOrUpdateAsync, a share is never
+    /// updated in place, only created once and later deleted), followed by a
+    /// Permissions.Create granting "anyone with the link" read access, since every other
+    /// file this app creates is deliberately private. Returns the new file's id and the
+    /// id of the permission just granted (the latter is only kept for reference -
+    /// RevokeShareAsync deletes the whole file rather than targeting the permission).
+    /// </summary>
+    public async Task<(string FileId, string? PermissionId)> UploadShareAsync(byte[] blob, string fileName)
+    {
+        RequireAuthenticated();
+        DebugLog.Write($"UploadShareAsync: creating new share file '{fileName}', {blob.Length} byte(s)...");
+
+        try
+        {
+            using var stream = new MemoryStream(blob);
+            var metadata = new DriveFile { Name = fileName };
+            var createRequest = _service!.Files.Create(metadata, stream, "application/octet-stream");
+            createRequest.Fields = "id";
+            var progress = await createRequest.UploadAsync();
+            if (progress.Status != UploadStatus.Completed)
+            {
+                DebugLog.WriteException("UploadShareAsync (create)", progress.Exception
+                    ?? new IOException($"Upload status was {progress.Status}, not Completed."));
+                throw new IOException("Google Drive upload did not complete: " + progress.Exception?.Message);
+            }
+
+            string fileId = createRequest.ResponseBody.Id;
+            DebugLog.Write($"UploadShareAsync: create succeeded, new file id '...{Suffix(fileId)}'. Granting anyone-with-link read access...");
+
+            var permission = new Google.Apis.Drive.v3.Data.Permission { Type = "anyone", Role = "reader" };
+            var permissionRequest = _service.Permissions.Create(permission, fileId);
+            permissionRequest.Fields = "id";
+            var createdPermission = await permissionRequest.ExecuteAsync();
+
+            DebugLog.Write($"UploadShareAsync: granted anyone-with-link read access, permission id '...{Suffix(createdPermission.Id)}'.");
+            return (fileId, createdPermission.Id);
+        }
+        catch (Exception ex)
+        {
+            DebugLog.WriteException("UploadShareAsync", ex);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Deletes a share's Drive file outright (rather than just removing its "anyone"
+    /// permission), so nothing about it lingers on Drive at all once revoked/expired.
+    /// Best-effort: called from ShareExpiryService's background sweep, where a file
+    /// that's already gone (e.g. revoked twice, or deleted by hand from Drive's own UI)
+    /// should count as a harmless no-op, not an error worth surfacing.
+    /// </summary>
+    public async Task RevokeShareAsync(string fileId)
+    {
+        RequireAuthenticated();
+        DebugLog.Write($"RevokeShareAsync: deleting share file id '...{Suffix(fileId)}'...");
+        try
+        {
+            await _service!.Files.Delete(fileId).ExecuteAsync();
+            DebugLog.Write("RevokeShareAsync: delete succeeded.");
+        }
+        catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            DebugLog.Write("RevokeShareAsync: file was already gone (404) - treating as already revoked.");
         }
     }
 

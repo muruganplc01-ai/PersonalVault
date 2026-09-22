@@ -1,7 +1,9 @@
 using System.Drawing;
 using System.Security.Cryptography;
+using System.Text.Json;
 using System.Windows.Forms;
 using PersonalVault.Models;
+using PersonalVault.Security;
 using PersonalVault.Services;
 using PersonalVault.Storage;
 using PersonalVault.Utils;
@@ -27,15 +29,36 @@ public class TrayApplicationContext : ApplicationContext
     private string? _driveFileId;
     private PaymentsData? _payments;
     private string? _paymentsDriveFileId;
+    private string? _settingsDriveFileId;
+    private readonly List<SharedLink> _shares = SharesStorage.Load();
+    private ShareExpiryService? _shareExpiry;
     private System.Windows.Forms.Timer? _idleTimer;
     private bool _isLocked;
     private ToolStripMenuItem? _startupMenuItem;
     private ToolStripMenuItem? _driveMenuItem;
     private bool _warnedNotSignedInThisSession;
 
+    /// <summary>
+    /// Exists purely so ShowMainForm() has a reliable way to hop onto the UI thread.
+    /// TrayApplicationContext itself isn't a Control (ApplicationContext has no window
+    /// of its own), and ShowMainForm() can be reached from a genuinely different thread
+    /// - a toast notification's "Open Vault" button is activated by Windows via a
+    /// background COM callback (see ToastActivator), which is finicky to marshal
+    /// reliably for an unpackaged app. Rather than trust that hop, ShowMainForm() checks
+    /// this control's InvokeRequired itself. Its handle is forced into existence in the
+    /// constructor (see below) because InvokeRequired is unreliable before that.
+    /// </summary>
+    private readonly Control _uiThreadMarshal = new();
+
     public TrayApplicationContext()
     {
         AppPaths.EnsureFoldersExist();
+
+        // Force the marshal control's handle to exist right away, on the UI thread,
+        // so InvokeRequired in ShowMainForm() works correctly from the very first call
+        // - without a created handle, InvokeRequired can incorrectly report false even
+        // when called from a different thread.
+        _ = _uiThreadMarshal.Handle;
 
         Icon trayIconImage = LoadTrayIcon();
 
@@ -93,6 +116,7 @@ public class TrayApplicationContext : ApplicationContext
 
         menu.Items.Add("Open Vault", null, (_, _) => ShowMainForm());
         menu.Items.Add("Profile...", null, (_, _) => OpenProfile());
+        menu.Items.Add("Shared Links...", null, (_, _) => OpenSharedLinks());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Sync Now", null, async (_, _) => await SyncNowAsync());
 
@@ -113,7 +137,7 @@ public class TrayApplicationContext : ApplicationContext
         {
             StartupManager.SetEnabled(_startupMenuItem.Checked);
             _settings.StartWithWindows = _startupMenuItem.Checked;
-            _settings.Save();
+            SaveSettings();
         };
         menu.Items.Add(_startupMenuItem);
 
@@ -160,6 +184,97 @@ public class TrayApplicationContext : ApplicationContext
         }
     }
 
+    private void OpenSharedLinks()
+    {
+        if (!EnsureUnlocked()) return;
+
+        _shareExpiry?.CheckNowAsync(); // catch up on anything missed while this window was closed, before showing the list
+        using var form = new SharedLinksForm(_shares, RevokeShareNowAsync);
+        form.ShowDialog();
+    }
+
+    /// <summary>
+    /// Encrypts a single account under a fresh random key, uploads it to Drive with
+    /// "anyone with the link" read access, records a SharedLink for the background
+    /// expiry sweep / "Shared Links..." management list, and returns the full share URL
+    /// (ShareConfig.ViewerBaseUrl plus the Drive file id and key in the URL fragment, so
+    /// the key itself never reaches any server - see docs/share/index.html). Called from
+    /// MainForm's Share... button via ShareAccountForm.
+    /// </summary>
+    private async Task<string> ShareAccountAsync(AccountEntry account, TimeSpan lifetime)
+    {
+        if (!_drive.IsAuthenticated)
+            throw new InvalidOperationException("Sign in to Google Drive first (tray menu -> Sign in to Google Drive) - sharing needs somewhere to host the encrypted link.");
+
+        var expiresUtc = DateTime.UtcNow.Add(lifetime);
+        var payload = new SharedAccountPayload
+        {
+            Name = account.Name,
+            Category = account.Category,
+            Institution = account.Institution,
+            UserName = account.UserName,
+            Password = account.Password,
+            AccountNumber = account.AccountNumber,
+            Website = account.Website,
+            PhoneNumber = account.PhoneNumber,
+            Notes = account.Notes,
+            ExtraFields = new Dictionary<string, string>(account.ExtraFields),
+            ExpiresUtc = expiresUtc
+        };
+
+        byte[] plaintext = JsonSerializer.SerializeToUtf8Bytes(payload);
+        byte[] key;
+        string driveFileId;
+        string? permissionId;
+        try
+        {
+            var (blob, rawKey) = ShareCrypto.Encrypt(plaintext);
+            key = rawKey;
+            (driveFileId, permissionId) = await _drive.UploadShareAsync(blob, $"{GoogleDriveSync.ShareFilePrefix}{Guid.NewGuid()}.bin");
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(plaintext);
+        }
+
+        _shares.Add(new SharedLink
+        {
+            AccountEntryId = account.Id,
+            AccountName = account.Name,
+            DriveFileId = driveFileId,
+            PermissionId = permissionId,
+            CreatedUtc = DateTime.UtcNow,
+            ExpiresUtc = expiresUtc
+        });
+        SharesStorage.Save(_shares);
+
+        string keyBase64Url = Convert.ToBase64String(key).Replace('+', '-').Replace('/', '_').TrimEnd('=');
+        long expUnixSeconds = ((DateTimeOffset)expiresUtc).ToUnixTimeSeconds();
+        return $"{ShareConfig.ViewerBaseUrl}#id={Uri.EscapeDataString(driveFileId)}&key={keyBase64Url}&exp={expUnixSeconds}";
+    }
+
+    /// <summary>
+    /// The Drive half of revoking a share, with no persistence side effect - this is
+    /// exactly what ShareExpiryService's background sweep needs (it sets Revoked and
+    /// saves shares.json itself, once per sweep, after possibly revoking several).
+    /// Throws if not signed in to Drive, so the sweep leaves the share unrevoked and
+    /// retries on its next tick rather than silently pretending it succeeded.
+    /// </summary>
+    private async Task RevokeShareOnDriveAsync(SharedLink share)
+    {
+        if (!_drive.IsAuthenticated)
+            throw new InvalidOperationException("Not signed in to Google Drive.");
+        await _drive.RevokeShareAsync(share.DriveFileId);
+    }
+
+    /// <summary>SharedLinksForm's "Revoke Now" button - revokes on Drive, then immediately marks/persists Revoked (unlike the background sweep, a single manual click doesn't need to batch anything).</summary>
+    private async Task RevokeShareNowAsync(SharedLink share)
+    {
+        await RevokeShareOnDriveAsync(share);
+        share.Revoked = true;
+        SharesStorage.Save(_shares);
+    }
+
     private void OpenSettings()
     {
         using var form = new SettingsForm(
@@ -169,7 +284,7 @@ public class TrayApplicationContext : ApplicationContext
             _drive.IsAuthenticated);
         if (form.ShowDialog() != DialogResult.OK) return;
 
-        _settings.Save();
+        SaveSettings();
         StartupManager.SetEnabled(_settings.StartWithWindows);
         if (_startupMenuItem != null) _startupMenuItem.Checked = _settings.StartWithWindows;
 
@@ -289,6 +404,9 @@ public class TrayApplicationContext : ApplicationContext
                 }
             }
 
+            // Settings restore runs before StartIdleMonitor so a restored AutoLockMinutes
+            // value takes effect from the very first idle check, not just after a restart.
+            await LoadOrRestoreSettingsAsync();
             StartIdleMonitor();
             await LoadOrRestorePaymentsAsync();
 
@@ -318,6 +436,12 @@ public class TrayApplicationContext : ApplicationContext
                 SaveVault,
                 _settings.ReminderDaysBefore);
             _notifier.Start();
+
+            _shareExpiry = new ShareExpiryService(
+                () => _shares,
+                SharesStorage.Save,
+                RevokeShareOnDriveAsync);
+            _shareExpiry.Start();
 
             DebugLog.Write("InitializeAsync: finished successfully.");
             ShowMainForm();
@@ -525,6 +649,17 @@ public class TrayApplicationContext : ApplicationContext
 
     private void ShowMainForm()
     {
+        // This can be reached from a thread other than the UI thread - most notably a
+        // toast notification's "Open Vault" button, which Windows activates via a
+        // background COM callback (see ToastActivator/ToastNotifier). Everything below
+        // touches Controls created on the UI thread, so hop over there first rather
+        // than trusting every current and future caller to already be on it.
+        if (_uiThreadMarshal.InvokeRequired)
+        {
+            _uiThreadMarshal.BeginInvoke(new Action(ShowMainForm));
+            return;
+        }
+
         if (!EnsureUnlocked()) return;
         if (_vault == null || _secret == null) return;
 
@@ -540,7 +675,8 @@ public class TrayApplicationContext : ApplicationContext
                 MarkAccountPaid,
                 BackfillPayments,
                 () => _settings.DefaultBrowserPath,
-                SetDefaultBrowserPath);
+                SetDefaultBrowserPath,
+                ShareAccountAsync);
             _mainForm.FormClosing += (_, e) =>
             {
                 // Closing the window just hides it - the app keeps running in the tray
@@ -777,7 +913,91 @@ public class TrayApplicationContext : ApplicationContext
     {
         DebugLog.Write($"SetDefaultBrowserPath: {(string.IsNullOrEmpty(path) ? "(cleared - back to system default)" : path)}.");
         _settings.DefaultBrowserPath = path;
+        SaveSettings();
+    }
+
+    /// <summary>
+    /// Call this (instead of _settings.Save() directly) whenever the USER actually
+    /// changed a preference - auto-lock, reminder days, start-with-Windows, default
+    /// browser - so it also gets backed up to Drive as part of disaster recovery.
+    /// Internal bookkeeping saves elsewhere (caching a Drive file id right after a
+    /// vault/payments upload) intentionally keep calling _settings.Save() directly
+    /// instead, so a routine vault save doesn't also re-upload settings.json every time.
+    /// </summary>
+    private void SaveSettings()
+    {
         _settings.Save();
+        _ = UploadSettingsToDriveAsync();
+    }
+
+    /// <summary>Same shape as UploadPaymentsToDriveAsync, for the local-preferences file.</summary>
+    private async Task UploadSettingsToDriveAsync()
+    {
+        DebugLog.Write($"UploadSettingsToDriveAsync: called. _drive.IsAuthenticated={_drive.IsAuthenticated}.");
+        if (!_drive.IsAuthenticated) return;
+
+        try
+        {
+            _settingsDriveFileId ??= _settings.SettingsDriveFileId
+                ?? await _drive.FindFileIdAsync(GoogleDriveSync.RemoteSettingsFileName);
+            DebugLog.Write($"UploadSettingsToDriveAsync: resolved _settingsDriveFileId={(_settingsDriveFileId == null ? "(null - will create new file)" : "set")}.");
+
+            _settingsDriveFileId = await _drive.UploadOrUpdateAsync(
+                AppPaths.SettingsPath, _settingsDriveFileId, GoogleDriveSync.RemoteSettingsFileName);
+
+            // Cache the id with a plain Save() (not SaveSettings()) so this doesn't
+            // trigger another upload of itself.
+            _settings.SettingsDriveFileId = _settingsDriveFileId;
+            _settings.Save();
+            DebugLog.Write("UploadSettingsToDriveAsync: upload call returned without throwing - upload succeeded.");
+        }
+        catch (Exception ex)
+        {
+            DebugLog.WriteException("UploadSettingsToDriveAsync", ex);
+            Notify("Personal Vault", "Could not sync settings to Google Drive: " + ex.Message, ToolTipIcon.Warning);
+        }
+    }
+
+    /// <summary>
+    /// Disaster-recovery counterpart for settings.json: only ever does anything when
+    /// this PC has no local settings.json yet (a genuinely fresh %AppData%, same
+    /// "firstRun" moment the vault/payments restores use) and Drive is already signed
+    /// in. Deliberately does NOT restore DefaultBrowserPath - a browser's install path
+    /// is a property of a specific PC, not something that should follow the vault to a
+    /// different machine, so this PC keeps whatever it already has for that one field
+    /// (empty/system-default on a truly fresh install) while adopting everything else.
+    /// </summary>
+    private async Task LoadOrRestoreSettingsAsync()
+    {
+        if (File.Exists(AppPaths.SettingsPath) || !_drive.IsAuthenticated) return;
+
+        try
+        {
+            var remoteId = await _drive.FindFileIdAsync(GoogleDriveSync.RemoteSettingsFileName);
+            if (remoteId == null) return;
+
+            var bytes = await _drive.DownloadAsync(remoteId);
+            var remoteSettings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(bytes);
+            if (remoteSettings == null) return;
+
+            _settings.StartWithWindows = remoteSettings.StartWithWindows;
+            _settings.ReminderDaysBefore = remoteSettings.ReminderDaysBefore;
+            _settings.AutoLockMinutes = remoteSettings.AutoLockMinutes;
+            _settings.DriveFileId ??= remoteSettings.DriveFileId;
+            _settings.PaymentsDriveFileId ??= remoteSettings.PaymentsDriveFileId;
+            // DefaultBrowserPath intentionally left as this PC's own value - see doc comment above.
+
+            _settingsDriveFileId = remoteId;
+            _settings.SettingsDriveFileId = remoteId;
+            _settings.Save();
+            DebugLog.Write("LoadOrRestoreSettingsAsync: restored preferences from Google Drive.");
+        }
+        catch (Exception ex)
+        {
+            // Non-fatal either way: worst case, preferences just start at their defaults
+            // on this PC, same as before this feature existed.
+            DebugLog.WriteException("LoadOrRestoreSettingsAsync (non-fatal)", ex);
+        }
     }
 
     /// <summary>
@@ -898,8 +1118,10 @@ public class TrayApplicationContext : ApplicationContext
         _idleTimer?.Stop();
         _idleTimer?.Dispose();
         _notifier?.Dispose();
+        _shareExpiry?.Dispose();
         _trayIcon.Visible = false;
         _trayIcon.Dispose();
+        _uiThreadMarshal.Dispose();
         ToastNotifier.ClearAll();
         Application.Exit();
     }

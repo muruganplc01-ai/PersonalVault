@@ -37,6 +37,14 @@ public static class AppPaths
     /// <summary>Small non-secret settings file (reminder windows, cached Drive file id, etc).</summary>
     public static readonly string SettingsPath = Path.Combine(RootFolder, "settings.json");
 
+    /// <summary>
+    /// Bookkeeping for active "Share Account" links (see Models/SharedLink.cs) - which
+    /// Drive file, when it expires, whether it's been revoked. Deliberately unencrypted:
+    /// it holds no secrets (the shared account data lives encrypted on Drive, and the
+    /// decryption key lives only in a share link's URL fragment, never on disk).
+    /// </summary>
+    public static readonly string SharesLocalPath = Path.Combine(RootFolder, "shares.json");
+
     public static void EnsureFoldersExist()
     {
         Directory.CreateDirectory(RootFolder);

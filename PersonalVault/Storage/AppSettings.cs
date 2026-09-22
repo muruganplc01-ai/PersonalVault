@@ -19,6 +19,9 @@ public class AppSettings
     /// <summary>Cached Google Drive file id for the payments file, so we don't have to search every time.</summary>
     public string? PaymentsDriveFileId { get; set; }
 
+    /// <summary>Cached Google Drive file id for this settings file itself, so we don't have to search every time.</summary>
+    public string? SettingsDriveFileId { get; set; }
+
     /// <summary>
     /// Full path to a specific browser .exe to use for "Open URL" (Accounts tab) and the
     /// Website "Open" button (Account Details), set from the Profile form. Null/empty

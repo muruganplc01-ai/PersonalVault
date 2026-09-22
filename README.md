@@ -71,6 +71,14 @@ This is a working v2 - see "What's next" below for what's still just an idea.
   history - so an accidental delete, a bad edit, or a botched sync has a recent copy to
   recover from (via Drive's web UI → right-click the file → "Manage versions"). This is
   best-effort and never blocks or fails a sync.
+- **Share an account (one-time link)**: click **Share...** in the account list window
+  to send one account to someone who doesn't use Personal Vault at all - no app, no
+  account, no sign-in on their end. Pick how long the link stays live (1 hour to 7
+  days), and the app encrypts just that one account under a brand-new random key,
+  uploads it to your own Google Drive as a link-readable file, and gives you a URL to
+  send however you like. See "Sharing an account (one-time link)" below for the
+  one-time setup this needs and its honest limitations (it's expiring, not a true
+  atomic single view).
 - **Rich notifications**: due-date alerts, lock notices, and sync status use real
   Windows action-center toasts (via `Microsoft.Toolkit.Uwp.Notifications`) with an
   "Open Vault" button, when Windows will let this unpackaged app register for them.
@@ -102,12 +110,21 @@ PersonalVault/
   Forms/ProfileForm.cs        Edit the vault owner's name/picture
   Forms/SettingsForm.cs       Edit AutoLockMinutes / reminder days / Start with Windows
   Forms/ChangeSecretForm.cs   Change the master secret
+  Forms/ShareAccountForm.cs   "Share Account" dialog - pick expiration, get a link
+  Forms/SharedLinksForm.cs    "Shared Links..." - list/revoke active share links
   Forms/TrayApplicationContext.cs   Owns the tray icon and ties everything together
+  Models/SharedLink.cs           Bookkeeping for one active share link (see shares.json)
+  Models/SharedAccountPayload.cs What's actually encrypted and sent for a shared account
+  Security/ShareCrypto.cs    AES-256-GCM for a shared account, random per-share key (no password)
+  Storage/SharesStorage.cs   Load/save shares.json (the SharedLink list)
+  Storage/ShareConfig.cs     One-time setup constant: your GitHub Pages viewer URL
+  Services/ShareExpiryService.cs Background sweep that revokes expired share links
   Utils/StartupManager.cs     "Start with Windows" via the per-user Run registry key
   Utils/CredentialBootstrap.cs   Auto-copies a bundled credentials.json into %AppData% on first run
   Utils/SystemIdleTime.cs     Reads system-wide idle time (Win32 GetLastInputInfo) for auto-lock
   Utils/CsvIO.cs              CSV export/import for accounts
   Resources/AppIcon.ico       App/tray icon (embedded into the .exe via <ApplicationIcon>)
+docs/share/index.html          Static page (host via GitHub Pages) that decrypts/shows a shared account
 ```
 
 ## Building
@@ -201,6 +218,70 @@ of a portable folder, that's possible with a tool like
 [Inno Setup](https://jrsoftware.org/isinfo.php), but needs its own separate setup script
 - ask if you want help writing one.
 
+## Sharing an account (one-time link)
+
+Personal Vault has no server of its own, so a "share this one account" link needs
+somewhere to live: it works by encrypting a single account under a fresh random key
+(never your master secret), hosting the ciphertext as a Drive file that's readable by
+anyone with the link, and pointing the link at a small static page that decrypts it in
+the recipient's own browser. The decryption key travels only in the URL's `#fragment`,
+which browsers never send to any server - so neither Google, nor GitHub Pages, nor
+anyone but the recipient ever sees it.
+
+**One-time setup** (you do this once, not per-share):
+
+1. **Publish the viewer page.** This repo already has it at `docs/share/index.html`. In
+   this repo's GitHub settings: **Settings -> Pages -> Source -> Deploy from a branch
+   -> Branch: `main`, Folder: `/docs`** -> Save. GitHub gives you a URL like
+   `https://yourusername.github.io/PersonalVault/`.
+2. **Create a restricted Google API key** (separate from `credentials.json` - that one
+   is an OAuth client for *you* to sign in as yourself; this one lets the *viewer page*
+   fetch an already-public file's bytes without any sign-in at all). In
+   [Google Cloud Console](https://console.cloud.google.com/) -> the same project you
+   already made for Drive sync -> **APIs & Services -> Credentials -> Create
+   Credentials -> API key**. Then click into it and restrict it:
+   - **API restrictions** -> restrict to the **Google Drive API** only.
+   - **Application restrictions** -> **Websites** -> add
+     `https://yourusername.github.io/*`.
+   This key can then only ever be used to read bytes of Drive files that are *already*
+   shared "anyone with the link" - never anything private - so it being visible in the
+   page's own source (unavoidable for a page with no backend) is expected and safe.
+3. **Paste both into place:**
+   - Open `docs/share/index.html`, find `DRIVE_API_KEY = "YOUR-RESTRICTED-DRIVE-API-KEY"`
+     near the top of the `<script>`, and replace it with the key from step 2. Commit and
+     push - GitHub Pages redeploys automatically.
+   - Open `PersonalVault/Storage/ShareConfig.cs` and set `ViewerBaseUrl` to your Pages
+     URL from step 1 plus `share/` (e.g. `https://yourusername.github.io/PersonalVault/share/`).
+     Rebuild the app.
+
+**Using it:** in the account list window, select an account -> **Share...** -> pick how
+long the link should stay live -> **Create Link**. The link is copied to your clipboard
+automatically. Anyone who opens it sees that one account's details in their browser and
+can copy any field - no Personal Vault install, no Google account, no sign-in needed on
+their end. Manage or immediately kill an active link anytime from the tray menu's
+**Shared Links...**.
+
+**Known limitations of this feature specifically** (see also "Known limitations" below):
+
+- **This is expiring, not a true one-time view.** Nothing server-side can mark a link
+  "already viewed and gone" the instant it's opened, because there is no server - only
+  Google Drive (which just serves bytes to anyone with the link) and this app's own
+  background sweep. In practice that means: the link works for anyone who has it until
+  it expires (1 hour to 7 days, your choice) or until you revoke it yourself from
+  "Shared Links...". Pick the shortest expiration that's actually convenient, and revoke
+  manually as soon as you know it's been seen if you want it gone sooner.
+- **The app needs to be running for expired links to actually get cleaned up** - the
+  sweep is a timer inside Personal Vault (every 15 minutes while it's running in the
+  tray), not something Google Drive does on its own. If the app is closed for a long
+  stretch, an expired-but-not-yet-swept link's Drive file can still technically be
+  fetched until the app runs again - the viewer page also refuses to *display* content
+  past its embedded expiration time as a courtesy, but that's a client-side check, not
+  real enforcement.
+- **The Drive API key in `docs/share/index.html` is visible to anyone who views the
+  page's source** - this is inherent to a page with no backend, not a bug. The
+  referrer restriction from step 2 above limits what it can be used for even if copied:
+  fetching bytes of files already marked "anyone with the link," nothing else.
+
 ## First run
 
 1. Build and run the app. If it finds no vault file yet and a `credentials.json` is
@@ -260,10 +341,17 @@ if you genuinely want a fresh start.
 
 ## Known limitations (flagged deliberately, not hidden)
 
-- **Not yet build-verified on Windows** - see "Building" above. This batch in
-  particular bumps the target framework to a Windows-10-SDK-versioned TFM
-  (`net8.0-windows10.0.19041.0`) for the toast notification library - budget extra time
-  for a first build/fix pass, and see the toast-notification note below.
+- **Builds cleanly on Windows as of the Share Account feature** (`dotnet build`
+  succeeds with only pre-existing, unrelated warnings) - this pass also fixed two
+  latent compile errors from before (a missing `GoogleDriveSync.RemoteSettingsFileName`
+  constant and a missing `AppSettings.SettingsDriveFileId` property, both referenced by
+  `TrayApplicationContext` but never defined). It has not yet been exercised
+  interactively end-to-end (add an account, sync, share a link, etc.) on a real
+  Windows desktop session - see the toast-notification note below for the one area
+  most likely to need a build/fix pass of its own.
+- Share Account links are expiring, not a true one-time view, and need the app running
+  for expired ones to actually get cleaned up on Drive - see "Sharing an account
+  (one-time link)" above for the full explanation and setup.
 - Auto-lock (10 min idle by default, see "How it works" above) covers walking away from
   an unlocked PC, but the secret is still a plain in-memory `string` while unlocked -
   .NET strings are immutable and the GC doesn't scrub freed memory, so this isn't

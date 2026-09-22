@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Personal Vault - Shared Account</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f6f8;
+    --card-bg: #ffffff;
+    --text: #1a2230;
+    --muted: #5b6572;
+    --border: #dde3ea;
+    --accent: #2f6fed;
+    --danger: #b3261e;
+    --danger-bg: #fdecea;
+    --ok-bg: #eef6ff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1420;
+      --card-bg: #171e2c;
+      --text: #e7ecf3;
+      --muted: #9aa7b8;
+      --border: #2a3446;
+      --accent: #6ea1ff;
+      --danger: #ff8a80;
+      --danger-bg: #3a1f1d;
+      --ok-bg: #16233a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  body {
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px;
+    min-height: 100vh;
+  }
+  .card {
+    width: 100%;
+    max-width: 520px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    height: fit-content;
+  }
+  h1 {
+    font-size: 18px;
+    margin: 0 0 4px 0;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 13px;
+    margin: 0 0 20px 0;
+  }
+  .field {
+    margin-bottom: 14px;
+  }
+  .field-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .field-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    background: transparent;
+  }
+  .field-value {
+    flex: 1;
+    font-size: 14px;
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+  .field-value.monospace {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  button.copy-btn, button.toggle-btn {
+    border: none;
+    background: transparent;
+    color: var(--accent);
+    font-size: 13px;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 6px;
+    white-space: nowrap;
+  }
+  button.copy-btn:hover, button.toggle-btn:hover {
+    background: var(--ok-bg);
+  }
+  .notice {
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 13px;
+    margin-bottom: 18px;
+  }
+  .notice.expiry {
+    background: var(--ok-bg);
+    color: var(--text);
+  }
+  .notice.error {
+    background: var(--danger-bg);
+    color: var(--danger);
+  }
+  .center-message {
+    text-align: center;
+    color: var(--muted);
+    padding: 40px 12px;
+  }
+  .center-message h1 {
+    color: var(--text);
+  }
+  footer {
+    margin-top: 18px;
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+  }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+  <div class="card" id="card">
+    <div id="loading" class="center-message">
+      <h1>Loading...</h1>
+      <p>Decrypting the shared account.</p>
+    </div>
+
+    <div id="error" class="center-message hidden">
+      <h1>This link has expired or already been used</h1>
+      <p id="errorDetail">The linked data is no longer available. Ask whoever shared it with you to send a new link.</p>
+    </div>
+
+    <div id="content" class="hidden">
+      <h1 id="accountName"></h1>
+      <p class="subtitle" id="accountCategory"></p>
+      <div id="expiryNotice" class="notice expiry"></div>
+      <div id="fields"></div>
+      <footer>
+        Decrypted entirely in your browser - the decryption key was never sent to any server.
+      </footer>
+    </div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------------------------------------------------------------------
+  // One-time setup: paste a Google Cloud API key here, restricted (in Cloud
+  // Console -> Credentials) to the Drive API and to this page's own HTTP
+  // referrer (e.g. "https://yourusername.github.io/*"). This key can only
+  // ever be used to fetch bytes of Drive files that are ALREADY shared
+  // "anyone with the link" - it cannot read private files, list a Drive, or
+  // write anything - so it being visible in this page's source is expected
+  // and safe as long as the referrer restriction is in place.
+  // ---------------------------------------------------------------------
+  var DRIVE_API_KEY = "YOUR-RESTRICTED-DRIVE-API-KEY";
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function showError(detail) {
+    $("loading").classList.add("hidden");
+    $("content").classList.add("hidden");
+    $("error").classList.remove("hidden");
+    if (detail) $("errorDetail").textContent = detail;
+  }
+
+  function base64UrlToBytes(b64url) {
+    var b64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4 !== 0) b64 += "=";
+    var binary = atob(b64);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  function bytesToUtf8(bytes) {
+    return new TextDecoder("utf-8").decode(bytes);
+  }
+
+  // Blob layout written by PersonalVault/Security/ShareCrypto.cs:
+  //   "PVSH" (4 bytes) | version (1 byte) | nonce (12 bytes) | ciphertext (N) | tag (16 bytes)
+  // Everything from the nonce onward except the nonce itself (ciphertext+tag,
+  // in that order) is handed to crypto.subtle.decrypt as one buffer, which is
+  // exactly what the Web Crypto AES-GCM API expects.
+  function parseBlob(bytes) {
+    var magic = bytesToUtf8(bytes.slice(0, 4));
+    if (magic !== "PVSH") throw new Error("Not a recognized Personal Vault share.");
+    var version = bytes[4];
+    if (version !== 1) throw new Error("Unsupported share format version: " + version);
+    var nonce = bytes.slice(5, 17);
+    var ciphertextAndTag = bytes.slice(17);
+    return { nonce: nonce, ciphertextAndTag: ciphertextAndTag };
+  }
+
+  function copyToClipboard(text, button) {
+    var original = button.textContent;
+    var done = function () {
+      button.textContent = "Copied";
+      setTimeout(function () { button.textContent = original; }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text); done(); });
+    } else {
+      fallbackCopy(text);
+      done();
+    }
+  }
+
+  function fallbackCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); } catch (e) { /* best-effort only */ }
+    document.body.removeChild(ta);
+  }
+
+  function addField(label, value, opts) {
+    opts = opts || {};
+    if (!value) return;
+
+    var field = document.createElement("div");
+    field.className = "field";
+
+    var labelEl = document.createElement("div");
+    labelEl.className = "field-label";
+    labelEl.textContent = label;
+    field.appendChild(labelEl);
+
+    var row = document.createElement("div");
+    row.className = "field-row";
+
+    var valueEl = document.createElement("div");
+    valueEl.className = "field-value" + (opts.monospace ? " monospace" : "");
+    var displayValue = value;
+    var isSecret = !!opts.secret;
+    valueEl.textContent = isSecret ? "••••••••••" : displayValue;
+    row.appendChild(valueEl);
+
+    if (isSecret) {
+      var toggleBtn = document.createElement("button");
+      toggleBtn.className = "toggle-btn";
+      toggleBtn.type = "button";
+      toggleBtn.textContent = "Show";
+      var shown = false;
+      toggleBtn.onclick = function () {
+        shown = !shown;
+        valueEl.textContent = shown ? displayValue : "••••••••••";
+        toggleBtn.textContent = shown ? "Hide" : "Show";
+      };
+      row.appendChild(toggleBtn);
+    }
+
+    var copyBtn = document.createElement("button");
+    copyBtn.className = "copy-btn";
+    copyBtn.type = "button";
+    copyBtn.textContent = "Copy";
+    copyBtn.onclick = function () { copyToClipboard(displayValue, copyBtn); };
+    row.appendChild(copyBtn);
+
+    field.appendChild(row);
+    $("fields").appendChild(field);
+  }
+
+  function render(payload) {
+    $("accountName").textContent = payload.Name || "(unnamed account)";
+    $("accountCategory").textContent = [payload.Category, payload.Institution].filter(Boolean).join(" - ");
+
+    if (payload.ExpiresUtc) {
+      var expires = new Date(payload.ExpiresUtc);
+      $("expiryNotice").textContent = "This link expires " + expires.toLocaleString() +
+        " (or sooner if revoked). Save anything you need before then.";
+    } else {
+      $("expiryNotice").classList.add("hidden");
+    }
+
+    addField("Username", payload.UserName);
+    addField("Password", payload.Password, { secret: true, monospace: true });
+    addField("Account Number", payload.AccountNumber, { monospace: true });
+    addField("Website", payload.Website);
+    addField("Phone Number", payload.PhoneNumber);
+    addField("Notes", payload.Notes);
+
+    if (payload.ExtraFields) {
+      Object.keys(payload.ExtraFields).forEach(function (key) {
+        addField(key, payload.ExtraFields[key]);
+      });
+    }
+
+    $("loading").classList.add("hidden");
+    $("content").classList.remove("hidden");
+  }
+
+  async function main() {
+    var hash = window.location.hash.replace(/^#/, "");
+    var params = new URLSearchParams(hash);
+    var id = params.get("id");
+    var key = params.get("key");
+
+    if (!id || !key) {
+      showError("This link is missing required information and cannot be opened.");
+      return;
+    }
+
+    var response;
+    try {
+      var url = "https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(id) +
+        "?alt=media&key=" + encodeURIComponent(DRIVE_API_KEY);
+      response = await fetch(url);
+    } catch (e) {
+      showError("Could not reach Google Drive. Check your internet connection and try again.");
+      return;
+    }
+
+    if (!response.ok) {
+      // 404 (deleted/expired/revoked) is the expected steady state once a
+      // share is gone - anything else is still shown as "gone" from the
+      // recipient's point of view, since there's nothing more useful to do.
+      showError();
+      return;
+    }
+
+    var blobBytes = new Uint8Array(await response.arrayBuffer());
+
+    var parsed;
+    try {
+      parsed = parseBlob(blobBytes);
+    } catch (e) {
+      showError("This link's data could not be read (" + e.message + ").");
+      return;
+    }
+
+    var keyBytes = base64UrlToBytes(key);
+    var cryptoKey;
+    try {
+      cryptoKey = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["decrypt"]);
+    } catch (e) {
+      showError("This link's key is invalid.");
+      return;
+    }
+
+    var plaintextBuffer;
+    try {
+      plaintextBuffer = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: parsed.nonce, tagLength: 128 },
+        cryptoKey,
+        parsed.ciphertextAndTag);
+    } catch (e) {
+      showError("This link's key does not match its data - the link may be corrupted.");
+      return;
+    }
+
+    var payload;
+    try {
+      payload = JSON.parse(bytesToUtf8(new Uint8Array(plaintextBuffer)));
+    } catch (e) {
+      showError("The decrypted data was not in the expected format.");
+      return;
+    }
+
+    render(payload);
+  }
+
+  main().catch(function () {
+    showError();
+  });
+})();
+</script>
+</body>
+</html>

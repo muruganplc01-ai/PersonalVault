@@ -32,7 +32,7 @@ public static class CsvIO
         {
             var fields = new[]
             {
-                a.Category.ToString(),
+                a.Category,
                 a.Name,
                 a.Institution,
                 a.Owner,
@@ -54,7 +54,7 @@ public static class CsvIO
 
     public static List<AccountEntry> Import(string path)
     {
-        var rows = ParseCsv(File.ReadAllText(path, Encoding.UTF8));
+        var rows = SimpleCsv.Parse(File.ReadAllText(path, Encoding.UTF8));
         if (rows.Count == 0) return new List<AccountEntry>();
 
         var header = rows[0];
@@ -79,7 +79,7 @@ public static class CsvIO
 
             var entry = new AccountEntry
             {
-                Category = Enum.TryParse<AccountCategory>(Get(iCategory), out var cat) ? cat : AccountCategory.Other,
+                Category = string.IsNullOrWhiteSpace(Get(iCategory)) ? AccountCategories.Default : Get(iCategory).Trim(),
                 Name = Get(iName),
                 Institution = Get(iInstitution),
                 Owner = Get(iOwner),
@@ -114,46 +114,5 @@ public static class CsvIO
         value ??= "";
         bool needsQuotes = value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r');
         return needsQuotes ? "\"" + value.Replace("\"", "\"\"") + "\"" : value;
-    }
-
-    /// <summary>Minimal RFC 4180-style CSV parser: handles quoted fields with embedded commas/newlines/escaped quotes.</summary>
-    private static List<string[]> ParseCsv(string text)
-    {
-        var rows = new List<string[]>();
-        var field = new StringBuilder();
-        var row = new List<string>();
-        bool inQuotes = false;
-
-        void EndField() { row.Add(field.ToString()); field.Clear(); }
-        void EndRow() { EndField(); rows.Add(row.ToArray()); row = new List<string>(); }
-
-        for (int i = 0; i < text.Length; i++)
-        {
-            char c = text[i];
-
-            if (inQuotes)
-            {
-                if (c == '"')
-                {
-                    if (i + 1 < text.Length && text[i + 1] == '"') { field.Append('"'); i++; }
-                    else inQuotes = false;
-                }
-                else field.Append(c);
-                continue;
-            }
-
-            switch (c)
-            {
-                case '"': inQuotes = true; break;
-                case ',': EndField(); break;
-                case '\r': break; // swallow - newline is handled on '\n'
-                case '\n': EndRow(); break;
-                default: field.Append(c); break;
-            }
-        }
-
-        if (field.Length > 0 || row.Count > 0) EndRow();
-
-        return rows.Where(r => r.Length > 1 || !string.IsNullOrEmpty(r[0])).ToList();
     }
 }

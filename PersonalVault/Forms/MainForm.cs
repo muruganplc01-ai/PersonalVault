@@ -21,6 +21,7 @@ public class MainForm : Form
     private readonly Action<AccountEntry, decimal, DateTime, int, RecurrenceType> _backfillPayments;
     private readonly Func<string?> _getDefaultBrowserPath;
     private readonly Action<string?> _setDefaultBrowserPath;
+    private readonly Func<AccountEntry, TimeSpan, Task<string>> _shareAccount;
     private readonly ListView _listView;
     private readonly TextBox _searchBox;
     private readonly ComboBox _categoryFilter;
@@ -34,6 +35,13 @@ public class MainForm : Form
     private readonly RadioButton _dueTodayRadio;
     private readonly RadioButton _dueInWeekRadio;
     private readonly Button _markPaidButton;
+    private readonly Label _duesTotalLabel;
+
+    // --- Overview tab ---
+    private readonly ListView _balancesListView;
+    private readonly Label _totalOnHandLabel;
+    private readonly Label _totalDuesLabel;
+    private readonly Label _netLabel;
 
     private const string AllCategoriesLabel = "All Categories";
     private const string AllOwnersLabel = "All Owners";
@@ -74,7 +82,8 @@ public class MainForm : Form
         Action<AccountEntry, decimal, DateTime> markPaid,
         Action<AccountEntry, decimal, DateTime, int, RecurrenceType> backfillPayments,
         Func<string?> getDefaultBrowserPath,
-        Action<string?> setDefaultBrowserPath)
+        Action<string?> setDefaultBrowserPath,
+        Func<AccountEntry, TimeSpan, Task<string>> shareAccount)
     {
         _vault = vault;
         _save = save;
@@ -84,6 +93,7 @@ public class MainForm : Form
         _backfillPayments = backfillPayments;
         _getDefaultBrowserPath = getDefaultBrowserPath;
         _setDefaultBrowserPath = setDefaultBrowserPath;
+        _shareAccount = shareAccount;
 
         Text = "Personal Vault";
         Width = 960;
@@ -168,9 +178,7 @@ public class MainForm : Form
         var categoryLabel = new Label { Text = "Category:", AutoSize = true, Padding = new Padding(0, 6, 6, 0) };
         _categoryFilter = new ComboBox { Width = 150, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(0, 3, 16, 0) };
         _categoryFilter.Items.Add(AllCategoriesLabel);
-        foreach (var category in Enum.GetValues<AccountCategory>())
-            _categoryFilter.Items.Add(category.ToString());
-        _categoryFilter.SelectedIndex = 0;
+        _categoryFilter.SelectedIndex = 0; // Populated for real by RefreshCategoryFilterItems, called from ApplyFilter below.
         _categoryFilter.SelectedIndexChanged += (_, _) => ApplyFilter();
         searchRow.Controls.Add(categoryLabel);
         searchRow.Controls.Add(_categoryFilter);
@@ -227,6 +235,7 @@ public class MainForm : Form
         var openUrlBtn = new Button { Text = "Open URL", AutoSize = true };
         var copyUserBtn = new Button { Text = "Copy Username", AutoSize = true };
         var copyPassBtn = new Button { Text = "Copy Password", AutoSize = true };
+        var shareBtn = new Button { Text = "Share...", AutoSize = true };
         var exportBtn = new Button { Text = "Export CSV...", AutoSize = true };
         var importBtn = new Button { Text = "Import CSV...", AutoSize = true };
         var profileBtn = new Button { Text = "Profile...", AutoSize = true };
@@ -237,13 +246,14 @@ public class MainForm : Form
         openUrlBtn.Click += (_, _) => OpenSelectedUrl();
         copyUserBtn.Click += (_, _) => CopyField(a => a.UserName, "Username");
         copyPassBtn.Click += (_, _) => CopyField(a => a.Password, "Password");
+        shareBtn.Click += (_, _) => ShareSelected();
         exportBtn.Click += (_, _) => ExportCsv();
         importBtn.Click += (_, _) => ImportCsv();
         profileBtn.Click += (_, _) => EditProfile();
 
         buttonPanel.Controls.AddRange(new Control[]
         {
-            addBtn, editBtn, deleteBtn, openUrlBtn, copyUserBtn, copyPassBtn, exportBtn, importBtn, profileBtn
+            addBtn, editBtn, deleteBtn, openUrlBtn, copyUserBtn, copyPassBtn, shareBtn, exportBtn, importBtn, profileBtn
         });
 
         var accountsTab = new TabPage("Accounts");
@@ -271,6 +281,8 @@ public class MainForm : Form
         duesFilterRow.Controls.Add(_pastDueRadio);
         duesFilterRow.Controls.Add(_dueTodayRadio);
         duesFilterRow.Controls.Add(_dueInWeekRadio);
+        _duesTotalLabel = new Label { AutoSize = true, Padding = new Padding(24, 3, 0, 0), ForeColor = Color.DimGray };
+        duesFilterRow.Controls.Add(_duesTotalLabel);
 
         _duesListView = new ListView
         {
@@ -287,6 +299,7 @@ public class MainForm : Form
         _duesListView.Columns.Add("Institution", 130);
         _duesListView.Columns.Add("Owner", 100);
         _duesListView.Columns.Add("Due Date", 100);
+        _duesListView.Columns.Add("Amount Due", 90);
         _duesListView.Columns.Add("Autopay", 70);
         _duesListView.Columns.Add("Last Paid", 170);
         _duesListView.DrawColumnHeader += ListView_DrawColumnHeader;
@@ -314,9 +327,65 @@ public class MainForm : Form
         duesTab.Controls.Add(duesButtonPanel);
         duesTab.Controls.Add(duesFilterRow);
 
+        // --- Overview tab: "how much do I have on hand" vs "how much do I owe",
+        // rolled up from whichever accounts have a Current balance / Amount due
+        // entered in Account Details (bank accounts, investment accounts, tuition/fees
+        // accounts, etc. - not limited to any one category).
+        var overviewTopPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            Padding = new Padding(8, 8, 8, 4)
+        };
+        _totalOnHandLabel = new Label { AutoSize = true, Font = new Font(Font, FontStyle.Bold), Padding = new Padding(0, 4, 24, 0) };
+        _totalDuesLabel = new Label { AutoSize = true, Font = new Font(Font, FontStyle.Bold), Padding = new Padding(0, 4, 24, 0) };
+        _netLabel = new Label { AutoSize = true, Font = new Font(Font, FontStyle.Bold), Padding = new Padding(0, 4, 0, 0) };
+        overviewTopPanel.Controls.Add(_totalOnHandLabel);
+        overviewTopPanel.Controls.Add(_totalDuesLabel);
+        overviewTopPanel.Controls.Add(_netLabel);
+
+        var overviewNote = new Label
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ForeColor = Color.DimGray,
+            Padding = new Padding(8, 0, 8, 6),
+            Text = "\"On Hand\" totals every account with a Current balance entered (bank, investment, etc.). " +
+                   "\"Dues\" totals every account with an Amount due entered (tuition/fees, a loan payoff, etc.). " +
+                   "Set these from Account Details."
+        };
+
+        _balancesListView = new ListView
+        {
+            Dock = DockStyle.Fill,
+            View = View.Details,
+            FullRowSelect = true,
+            MultiSelect = false,
+            GridLines = true,
+            HideSelection = false,
+            OwnerDraw = true
+        };
+        _balancesListView.Columns.Add("Category", 130);
+        _balancesListView.Columns.Add("Name", 170);
+        _balancesListView.Columns.Add("Institution", 140);
+        _balancesListView.Columns.Add("Owner", 110);
+        _balancesListView.Columns.Add("Balance", 110);
+        _balancesListView.Columns.Add("As Of", 100);
+        _balancesListView.DoubleClick += (_, _) => EditFromBalancesTab();
+        _balancesListView.DrawColumnHeader += ListView_DrawColumnHeader;
+        _balancesListView.DrawItem += (_, e) => e.DrawDefault = false;
+        _balancesListView.DrawSubItem += ListView_DrawSubItem;
+
+        var overviewTab = new TabPage("Overview");
+        overviewTab.Controls.Add(_balancesListView);
+        overviewTab.Controls.Add(overviewNote);
+        overviewTab.Controls.Add(overviewTopPanel);
+
         var tabControl = new TabControl { Dock = DockStyle.Fill };
         tabControl.TabPages.Add(accountsTab);
         tabControl.TabPages.Add(duesTab);
+        tabControl.TabPages.Add(overviewTab);
         Controls.Add(tabControl);
 
         UpdateDriveStatus(isDriveConnected);
@@ -384,6 +453,7 @@ public class MainForm : Form
         _vault = vault;
         ApplyFilter();
         RefreshDuesList();
+        RefreshOverview();
     }
 
     /// <summary>Rebuilds the Dues tab's list from whichever radio button is currently selected.</summary>
@@ -415,11 +485,12 @@ public class MainForm : Form
         _duesListView.Items.Clear();
         foreach (var account in accounts.OrderBy(a => a.DueDate))
         {
-            var item = new ListViewItem(account.Category.ToString());
+            var item = new ListViewItem(account.Category);
             item.SubItems.Add(account.Name);
             item.SubItems.Add(account.Institution);
             item.SubItems.Add(account.Owner);
             item.SubItems.Add(account.DueDate?.ToString("MMM d, yyyy") ?? "");
+            item.SubItems.Add(account.AmountDue.HasValue ? account.AmountDue.Value.ToString("C") : "");
             item.SubItems.Add(account.IsAutomaticPayment ? "Yes" : "");
             item.SubItems.Add(lastPaymentByAccount.TryGetValue(account.Id, out var lastPaid)
                 ? $"{lastPaid.AmountPaid:C} on {lastPaid.PaidDate:MMM d, yyyy}"
@@ -429,7 +500,63 @@ public class MainForm : Form
         }
         _duesListView.EndUpdate();
 
+        var totalDue = accounts.Where(a => a.AmountDue.HasValue).Sum(a => a.AmountDue!.Value);
+        _duesTotalLabel.Text = $"Total amount due (this list): {totalDue:C}";
+
         _markPaidButton.Enabled = false;
+    }
+
+    /// <summary>
+    /// Rebuilds the Overview tab: every account with a Current balance entered, plus
+    /// the On Hand / Dues / Net totals. Called whenever accounts are added, edited,
+    /// deleted or imported, and whenever the vault data is reloaded.
+    /// </summary>
+    private void RefreshOverview()
+    {
+        var withBalance = _vault.Accounts.Where(a => a.CurrentBalance.HasValue)
+            .OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        _balancesListView.BeginUpdate();
+        _balancesListView.Items.Clear();
+        foreach (var account in withBalance)
+        {
+            var item = new ListViewItem(account.Category);
+            item.SubItems.Add(account.Name);
+            item.SubItems.Add(account.Institution);
+            item.SubItems.Add(account.Owner);
+            item.SubItems.Add(account.CurrentBalance!.Value.ToString("C"));
+            item.SubItems.Add(account.CurrentBalanceAsOf?.ToString("MMM d, yyyy") ?? "");
+            item.Tag = account;
+            _balancesListView.Items.Add(item);
+        }
+        _balancesListView.EndUpdate();
+
+        var totalOnHand = withBalance.Sum(a => a.CurrentBalance!.Value);
+        var totalDues = _vault.Accounts.Where(a => a.AmountDue.HasValue).Sum(a => a.AmountDue!.Value);
+        var net = totalOnHand - totalDues;
+
+        _totalOnHandLabel.Text = $"Total On Hand: {totalOnHand:C}";
+        _totalDuesLabel.Text = $"Total Dues: {totalDues:C}";
+        _netLabel.Text = $"Net: {net:C}";
+        _netLabel.ForeColor = net < 0 ? Color.Firebrick : Color.SeaGreen;
+    }
+
+    /// <summary>Double-click on the Overview tab's grid opens the same Account Details dialog as the Accounts tab.</summary>
+    private void EditFromBalancesTab()
+    {
+        if (_balancesListView.SelectedItems.Count == 0) return;
+        var account = (AccountEntry)_balancesListView.SelectedItems[0].Tag!;
+
+        using var form = new AccountEditForm(account, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields);
+        if (form.ShowDialog(this) == DialogResult.OK)
+        {
+            account.ModifiedUtc = DateTime.UtcNow;
+            _save();
+            ApplyFilter();
+            RefreshDuesList();
+            RefreshOverview();
+        }
     }
 
     private void MarkSelectedDuePaid()
@@ -499,6 +626,7 @@ public class MainForm : Form
         if (_updatingFilters) return;
 
         RefreshOwnerFilterItems();
+        RefreshCategoryFilterItems();
 
         var query = _searchBox.Text.Trim();
         var categorySelection = _categoryFilter.SelectedItem as string;
@@ -508,7 +636,7 @@ public class MainForm : Form
         if (!string.IsNullOrEmpty(query))
             accounts = accounts.Where(a => MatchesSearch(a, query));
         if (!string.IsNullOrEmpty(categorySelection) && categorySelection != AllCategoriesLabel)
-            accounts = accounts.Where(a => a.Category.ToString() == categorySelection);
+            accounts = accounts.Where(a => string.Equals(a.Category, categorySelection, StringComparison.OrdinalIgnoreCase));
         if (!string.IsNullOrEmpty(ownerSelection) && ownerSelection != AllOwnersLabel)
             accounts = accounts.Where(a => string.Equals(a.Owner, ownerSelection, StringComparison.OrdinalIgnoreCase));
 
@@ -516,7 +644,7 @@ public class MainForm : Form
         _listView.Items.Clear();
         foreach (var account in accounts.OrderBy(a => a.DueDate ?? DateTime.MaxValue))
         {
-            var item = new ListViewItem(account.Category.ToString());
+            var item = new ListViewItem(account.Category);
             item.SubItems.Add(account.Name);
             item.SubItems.Add(account.Institution);
             item.SubItems.Add(account.Owner);
@@ -567,6 +695,82 @@ public class MainForm : Form
         }
     }
 
+    /// <summary>
+    /// Rebuilds the Category dropdown from the built-in defaults plus whatever
+    /// categories are actually in use across the vault right now - the same
+    /// self-cleaning, always-in-sync approach as RefreshOwnerFilterItems, so a custom
+    /// category added from Account Details ("Tuition", say) shows up here too without
+    /// any separate list to maintain.
+    /// </summary>
+    private void RefreshCategoryFilterItems()
+    {
+        var inUse = _vault.Accounts
+            .Select(a => a.Category)
+            .Where(c => !string.IsNullOrWhiteSpace(c));
+
+        var categories = AccountCategories.Defaults
+            .Union(inUse, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(c => c, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var desired = new List<string> { AllCategoriesLabel };
+        desired.AddRange(categories);
+
+        var current = _categoryFilter.Items.Cast<string>().ToArray();
+        if (current.SequenceEqual(desired)) return;
+
+        var previousSelection = _categoryFilter.SelectedItem as string;
+
+        _updatingFilters = true;
+        try
+        {
+            _categoryFilter.Items.Clear();
+            _categoryFilter.Items.AddRange(desired.Cast<object>().ToArray());
+            var restoredIndex = previousSelection != null ? _categoryFilter.Items.IndexOf(previousSelection) : -1;
+            _categoryFilter.SelectedIndex = restoredIndex >= 0 ? restoredIndex : 0;
+        }
+        finally
+        {
+            _updatingFilters = false;
+        }
+    }
+
+    /// <summary>
+    /// Every category currently known to the vault (built-in defaults plus any custom
+    /// ones already in use), for seeding the Category dropdown in a new/edited
+    /// account's Account Details dialog.
+    /// </summary>
+    private IEnumerable<string> KnownCategories() =>
+        AccountCategories.Defaults
+            .Union(_vault.Accounts.Select(a => a.Category).Where(c => !string.IsNullOrWhiteSpace(c)), StringComparer.OrdinalIgnoreCase)
+            .OrderBy(c => c, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Looks up a previously-defined "suggested fields" template for a custom category
+    /// (see VaultData.CustomCategoryFields) - matched case-insensitively since the
+    /// dictionary's own comparer doesn't survive JSON round-tripping.
+    /// </summary>
+    private string[]? GetCustomCategoryFields(string category) =>
+        _vault.CustomCategoryFields
+            .FirstOrDefault(kv => string.Equals(kv.Key, category, StringComparison.OrdinalIgnoreCase))
+            .Value;
+
+    /// <summary>
+    /// Saves (or overwrites) the suggested-fields template for a custom category, from
+    /// Account Details' "+ Category Fields" button, and persists the vault immediately
+    /// so the definition isn't lost even if this particular account edit is cancelled.
+    /// </summary>
+    private void SaveCustomCategoryFields(string category, string[] fields)
+    {
+        var existingKey = _vault.CustomCategoryFields.Keys
+            .FirstOrDefault(k => string.Equals(k, category, StringComparison.OrdinalIgnoreCase));
+        if (existingKey != null)
+            _vault.CustomCategoryFields.Remove(existingKey);
+
+        _vault.CustomCategoryFields[category] = fields;
+        _save();
+    }
+
     /// <summary>Full-text-ish search across every field a person might actually remember about an account, including extra fields.</summary>
     private static bool MatchesSearch(AccountEntry a, string query)
     {
@@ -574,7 +778,7 @@ public class MainForm : Form
 
         return Has(a.Name) || Has(a.Institution) || Has(a.Owner) || Has(a.UserName) ||
                Has(a.AccountNumber) || Has(a.Website) || Has(a.PhoneNumber) || Has(a.Notes) ||
-               Has(a.Category.ToString()) ||
+               Has(a.Category) ||
                a.ExtraFields.Any(kv => Has(kv.Key) || Has(kv.Value));
     }
 
@@ -584,12 +788,14 @@ public class MainForm : Form
     private void AddNew()
     {
         var entry = new AccountEntry();
-        using var form = new AccountEditForm(entry, _vault.Profile.Name, _getDefaultBrowserPath());
+        using var form = new AccountEditForm(entry, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields);
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             _vault.Accounts.Add(entry);
             _save();
             ApplyFilter();
+            RefreshDuesList();
+            RefreshOverview();
         }
     }
 
@@ -598,12 +804,14 @@ public class MainForm : Form
         var account = SelectedAccount();
         if (account == null) return;
 
-        using var form = new AccountEditForm(account, _vault.Profile.Name, _getDefaultBrowserPath());
+        using var form = new AccountEditForm(account, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields);
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             account.ModifiedUtc = DateTime.UtcNow;
             _save();
             ApplyFilter();
+            RefreshDuesList();
+            RefreshOverview();
         }
     }
 
@@ -619,6 +827,8 @@ public class MainForm : Form
         _vault.Accounts.Remove(account);
         _save();
         ApplyFilter();
+        RefreshDuesList();
+        RefreshOverview();
     }
 
     /// <summary>
@@ -662,6 +872,16 @@ public class MainForm : Form
 
         MessageBox.Show(this, $"{label} copied to clipboard. It will clear automatically in 20 seconds.",
             "Personal Vault", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
+    /// <summary>Opens the Share Account dialog for the selected account - see ShareAccountForm / TrayApplicationContext.ShareAccountAsync.</summary>
+    private void ShareSelected()
+    {
+        var account = SelectedAccount();
+        if (account == null) return;
+
+        using var form = new ShareAccountForm(account, _shareAccount);
+        form.ShowDialog(this);
     }
 
     /// <summary>Clears the clipboard ~20s after a copy, but only if it still holds exactly what we put there.</summary>
@@ -736,6 +956,8 @@ public class MainForm : Form
             _vault.Accounts.AddRange(imported);
             _save();
             ApplyFilter();
+            RefreshDuesList();
+            RefreshOverview();
 
             MessageBox.Show(this, $"Imported {imported.Count} account(s).", "Personal Vault",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);

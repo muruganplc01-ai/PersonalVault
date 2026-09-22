@@ -1,22 +1,21 @@
 namespace PersonalVault.Models;
 
 /// <summary>
-/// The kinds of accounts this vault knows about. Add more here any time -
-/// existing entries are unaffected, and the edit form picks up new values automatically.
+/// The built-in starter categories. The vault is NOT limited to these - use the
+/// "+ New..." button next to Category in Account Details to add your own (e.g.
+/// "Tuition", "College Fees"). Category is stored as plain text rather than a fixed
+/// enum specifically so new ones never require a code change; this list only supplies
+/// sensible defaults for a brand-new vault and for CategoryFieldSpec's suggestions.
 /// </summary>
-public enum AccountCategory
+public static class AccountCategories
 {
-    BankAccount,
-    CreditCard,
-    Mortgage,
-    CarLoan,
-    Insurance,
-    Utility,
-    Membership,
-    HomeTax,
-    ApartmentRental,
-    Investment,
-    Other
+    public static readonly string[] Defaults =
+    {
+        "BankAccount", "CreditCard", "Mortgage", "CarLoan", "Insurance", "Utility",
+        "Membership", "HomeTax", "ApartmentRental", "Investment", "Other"
+    };
+
+    public const string Default = "Other";
 }
 
 public enum RecurrenceType
@@ -33,28 +32,33 @@ public enum RecurrenceType
 /// for insurance. These are just the keys AccountEditForm pre-populates into
 /// ExtraFields for a given category - not a schema change, so older vault files with
 /// arbitrary ExtraFields keys keep working exactly as before, and any field can still
-/// be renamed or removed freely in the edit form.
+/// be renamed or removed freely in the edit form. Looked up case-insensitively so it
+/// still matches the built-in categories regardless of how they were typed; a
+/// user-added custom category simply has no suggestions (an empty list), which is
+/// expected - there's no way to know ahead of time what fields "Tuition" should have.
 /// </summary>
 public static class CategoryFieldSpec
 {
-    public static readonly IReadOnlyDictionary<AccountCategory, string[]> SuggestedFields =
-        new Dictionary<AccountCategory, string[]>
+    public static readonly IReadOnlyDictionary<string, string[]> SuggestedFields =
+        new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            [AccountCategory.BankAccount] = new[] { "Routing Number", "Account Type" },
-            [AccountCategory.CreditCard] = new[] { "Credit Limit", "APR (%)", "Rewards Program" },
-            [AccountCategory.Mortgage] = new[] { "Loan Amount", "Interest Rate (%)", "Term (years)", "Lender Contact" },
-            [AccountCategory.CarLoan] = new[] { "Loan Amount", "APR (%)", "Term (months)", "Lender Contact" },
-            [AccountCategory.Insurance] = new[] { "Policy Number", "Premium Amount", "Coverage Type" },
-            [AccountCategory.Utility] = new[] { "Meter / Account #", "Provider", "Service Address" },
-            [AccountCategory.Membership] = new[] { "Membership ID", "Plan / Tier", "Renewal Fee" },
-            [AccountCategory.HomeTax] = new[] { "Parcel / Property ID", "Assessed Value", "Tax Authority" },
-            [AccountCategory.ApartmentRental] = new[] { "Lease Start", "Lease End", "Monthly Rent", "Landlord Contact" },
-            [AccountCategory.Investment] = new[] { "Account Type (401k/IRA/Brokerage)", "Advisor Contact" },
-            [AccountCategory.Other] = Array.Empty<string>(),
+            ["BankAccount"] = new[] { "Routing Number", "Account Type" },
+            ["CreditCard"] = new[] { "Credit Limit", "APR (%)", "Rewards Program" },
+            ["Mortgage"] = new[] { "Loan Amount", "Interest Rate (%)", "Term (years)", "Lender Contact" },
+            ["CarLoan"] = new[] { "Loan Amount", "APR (%)", "Term (months)", "Lender Contact" },
+            ["Insurance"] = new[] { "Policy Number", "Premium Amount", "Coverage Type" },
+            ["Utility"] = new[] { "Meter / Account #", "Provider", "Service Address" },
+            ["Membership"] = new[] { "Membership ID", "Plan / Tier", "Renewal Fee" },
+            ["HomeTax"] = new[] { "Parcel / Property ID", "Assessed Value", "Tax Authority" },
+            ["ApartmentRental"] = new[] { "Lease Start", "Lease End", "Monthly Rent", "Landlord Contact" },
+            ["Investment"] = new[] { "Account Type (401k/IRA/Brokerage)", "Advisor Contact" },
+            ["Other"] = Array.Empty<string>(),
         };
 
-    public static string[] For(AccountCategory category) =>
-        SuggestedFields.TryGetValue(category, out var fields) ? fields : Array.Empty<string>();
+    public static string[] For(string? category) =>
+        !string.IsNullOrWhiteSpace(category) && SuggestedFields.TryGetValue(category, out var fields)
+            ? fields
+            : Array.Empty<string>();
 }
 
 /// <summary>
@@ -66,7 +70,12 @@ public class AccountEntry
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
-    public AccountCategory Category { get; set; } = AccountCategory.Other;
+    /// <summary>
+    /// Free text, not a fixed enum - lets a person add their own categories (e.g.
+    /// "Tuition") from Account Details rather than being stuck with the built-in list.
+    /// Defaults to "Other" so nothing is ever blank.
+    /// </summary>
+    public string Category { get; set; } = AccountCategories.Default;
 
     /// <summary>Friendly label, e.g. "Chase Checking" or "Toyota Car Loan".</summary>
     public string Name { get; set; } = string.Empty;
@@ -96,6 +105,28 @@ public class AccountEntry
     /// need to go pay manually.
     /// </summary>
     public bool IsAutomaticPayment { get; set; }
+
+    /// <summary>
+    /// A fixed amount owed on this account - e.g. a remaining tuition/college-fees
+    /// balance - separate from DueDate/Recurrence, which are about *when* a bill is
+    /// next due rather than a running balance owed. Null means "not tracked for this
+    /// account" and is kept nullable (rather than defaulting to 0) so a genuine $0
+    /// amount due stays distinguishable from nothing having been entered at all. Shown
+    /// on the Dues tab and totalled into the Overview tab's "Total Dues" figure.
+    /// </summary>
+    public decimal? AmountDue { get; set; }
+
+    /// <summary>
+    /// A point-in-time balance snapshot, with the date it was as of - meant for bank
+    /// and investment accounts ("how much do I currently have"), but not restricted to
+    /// any particular category. Null CurrentBalance means "not tracked," for the same
+    /// 0-vs-not-entered reason as AmountDue above. Feeds the Overview tab's "Total On
+    /// Hand" figure.
+    /// </summary>
+    public decimal? CurrentBalance { get; set; }
+
+    /// <summary>The date CurrentBalance was accurate as of. Only meaningful when CurrentBalance is set.</summary>
+    public DateTime? CurrentBalanceAsOf { get; set; }
 
     public string Notes { get; set; } = string.Empty;
 
