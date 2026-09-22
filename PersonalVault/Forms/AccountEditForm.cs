@@ -17,9 +17,13 @@ public class AccountEditForm : Form
     private readonly Func<string, string[]?>? _getCustomCategoryFields;
     private readonly Action<string, string[]>? _saveCustomCategoryFields;
 
+    private const string CreditCardCategory = "CreditCard";
+
     private readonly ComboBox _categoryBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly Button _suggestFieldsButton = new() { Text = "+ Category Fields", AutoSize = true };
     private readonly Button _addCategoryButton = new() { Text = "+ New...", AutoSize = true };
+    private readonly Label _cardDetailsLabel = new() { Text = "Card Details:", AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 6, 6, 0) };
+    private readonly Button _cardDetailsButton = new() { Text = "Enter Card Details...", AutoSize = true };
     private readonly TextBox _nameBox = new() { Dock = DockStyle.Fill };
     private readonly TextBox _institutionBox = new() { Dock = DockStyle.Fill };
     private readonly TextBox _ownerBox = new() { Dock = DockStyle.Fill };
@@ -133,6 +137,13 @@ public class AccountEditForm : Form
 
         AddRow(layout, ref row, "Account #:", _accountNumberBox);
 
+        // Only shown for the CreditCard category - see UpdateCardDetailsVisibility.
+        layout.RowCount = row + 1;
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.Controls.Add(_cardDetailsLabel, 0, row);
+        layout.Controls.Add(_cardDetailsButton, 1, row);
+        row++;
+
         var websitePanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoSize = true };
         websitePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         websitePanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -196,6 +207,8 @@ public class AccountEditForm : Form
         _generateButton.Click += (_, _) => _passwordBox.Text = GeneratePassword();
         _suggestFieldsButton.Click += (_, _) => ApplySuggestedFields();
         _addCategoryButton.Click += (_, _) => AddNewCategory();
+        _cardDetailsButton.Click += (_, _) => OpenCardDetails();
+        _categoryBox.SelectedIndexChanged += (_, _) => UpdateCardDetailsVisibility();
         _openWebsiteButton.Click += (_, _) => OpenWebsite();
         _hasAmountDueBox.CheckedChanged += (_, _) => _amountDueBox.Enabled = _hasAmountDueBox.Checked;
         _hasBalanceBox.CheckedChanged += (_, _) =>
@@ -240,6 +253,7 @@ public class AccountEditForm : Form
         _categoryBox.SelectedItem = _categoryBox.Items.Cast<string>()
             .FirstOrDefault(c => string.Equals(c, _entry.Category, StringComparison.OrdinalIgnoreCase))
             ?? _categoryBox.Items[0];
+        UpdateCardDetailsVisibility();
 
         _nameBox.Text = _entry.Name;
         _institutionBox.Text = _entry.Institution;
@@ -509,6 +523,61 @@ public class AccountEditForm : Form
 
         _saveCustomCategoryFields(categoryText, fields);
         return fields;
+    }
+
+    /// <summary>Shows/hides the "Card Details..." row based on the currently selected category - only relevant for CreditCard.</summary>
+    private void UpdateCardDetailsVisibility()
+    {
+        bool isCreditCard = string.Equals(_categoryBox.SelectedItem as string, CreditCardCategory, StringComparison.OrdinalIgnoreCase);
+        _cardDetailsLabel.Visible = isCreditCard;
+        _cardDetailsButton.Visible = isCreditCard;
+    }
+
+    /// <summary>
+    /// Opens the structured Card Details popup (see cc.png-style Card
+    /// Number/Expiration/Security Code/Cardholder Name layout in CreditCardDetailsForm),
+    /// pre-filled from the Account # field and whatever's already in Extra info. On
+    /// Save, the card number overwrites Account # (so it shows up in the same place any
+    /// other account's identifying number does) and the other four values are merged
+    /// into Extra info - nothing here is a new AccountEntry field, so older vault data
+    /// isn't affected either way.
+    /// </summary>
+    private void OpenCardDetails()
+    {
+        var extraFields = ParseExtraFieldsBox();
+        using var dialog = new CreditCardDetailsForm(
+            _accountNumberBox.Text,
+            extraFields.GetValueOrDefault("Expiration Month", string.Empty),
+            extraFields.GetValueOrDefault("Expiration Year", string.Empty),
+            extraFields.GetValueOrDefault("Security Code", string.Empty),
+            extraFields.GetValueOrDefault("Cardholder Name", string.Empty));
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        _accountNumberBox.Text = dialog.CardNumber;
+        UpsertExtraField("Cardholder Name", dialog.CardholderName);
+        UpsertExtraField("Expiration Month", dialog.ExpirationMonth);
+        UpsertExtraField("Expiration Year", dialog.ExpirationYear);
+        UpsertExtraField("Security Code", dialog.SecurityCode);
+    }
+
+    /// <summary>Read-only parse of the Extra info box, for pre-filling the Card Details popup - not used for the actual Save (see SaveButton_Click, which parses it fresh with its own comparer).</summary>
+    private Dictionary<string, string> ParseExtraFieldsBox() =>
+        _extraFieldsBox.Lines
+            .Select(line => line.Split('=', 2))
+            .Where(parts => parts.Length == 2 && !string.IsNullOrWhiteSpace(parts[0]))
+            .ToDictionary(parts => parts[0].Trim(), parts => parts[1].Trim(), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Replaces (or removes, if value is blank) a single "key=value" line in the Extra info box, leaving every other line untouched - used by OpenCardDetails so re-opening it doesn't duplicate fields.</summary>
+    private void UpsertExtraField(string key, string value)
+    {
+        var lines = _extraFieldsBox.Lines
+            .Where(line => !string.Equals(line.Split('=', 2)[0].Trim(), key, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (!string.IsNullOrEmpty(value))
+            lines.Add($"{key}={value}");
+
+        _extraFieldsBox.Lines = lines.ToArray();
     }
 
     private void InsertFieldPlaceholders(string[] suggested)

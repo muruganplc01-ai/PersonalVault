@@ -176,7 +176,7 @@ public class TrayApplicationContext : ApplicationContext
         if (!EnsureUnlocked()) return;
         if (_vault == null) return;
 
-        using var form = new ProfileForm(_vault.Profile, _settings.DefaultBrowserPath, _settings.GitHubUsername);
+        using var form = new ProfileForm(_vault.Profile, _settings.DefaultBrowserPath, _settings.GitHubUsername, ChangeSecret);
         if (form.ShowDialog() == DialogResult.OK)
         {
             SetDefaultBrowserPath(form.SelectedBrowserPath);
@@ -688,6 +688,7 @@ public class TrayApplicationContext : ApplicationContext
                 SetDefaultBrowserPath,
                 () => _settings.GitHubUsername,
                 SetGitHubUsername,
+                ChangeSecret,
                 ShareAccountAsync);
             _mainForm.FormClosing += (_, e) =>
             {

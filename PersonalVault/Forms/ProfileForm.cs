@@ -14,7 +14,9 @@ namespace PersonalVault.Forms;
 /// the passed-in VaultProfile when the user clicks Save - same "mutate in place, caller
 /// decides whether to persist" pattern as AccountEditForm; the AppSettings fields come
 /// back out via SelectedBrowserPath/GitHubUsername for the caller to persist instead,
-/// since this form has no direct access to AppSettings.
+/// since this form has no direct access to AppSettings. "Change Master Password..." is
+/// a shortcut to the same ChangeSecretForm flow as the tray menu's "Change Master
+/// Secret..." - see the changeMasterSecret constructor parameter.
 ///
 /// The picture never leaves this app except inside the encrypted vault file itself -
 /// there is deliberately no separate upload of it anywhere.
@@ -52,13 +54,23 @@ public class ProfileForm : Form
     /// <summary>Same pattern as SelectedBrowserPath, for AppSettings.GitHubUsername.</summary>
     public string? GitHubUsername { get; private set; }
 
-    public ProfileForm(VaultProfile profile, string? currentDefaultBrowserPath = null, string? currentGitHubUsername = null)
+    private readonly Action? _changeMasterSecret;
+
+    /// <summary>
+    /// changeMasterSecret is TrayApplicationContext.ChangeSecret, passed in so the
+    /// button below can trigger the existing verify-old-secret / re-encrypt-the-vault
+    /// flow (ChangeSecretForm) without this form needing to know anything about secrets
+    /// or encryption itself - null (its default) hides the button entirely, for any
+    /// future caller that doesn't have that capability wired up.
+    /// </summary>
+    public ProfileForm(VaultProfile profile, string? currentDefaultBrowserPath = null, string? currentGitHubUsername = null, Action? changeMasterSecret = null)
     {
         _profile = profile;
+        _changeMasterSecret = changeMasterSecret;
 
         Text = "Your Profile";
         Width = 400;
-        Height = 470;
+        Height = 640;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MaximizeBox = false;
@@ -100,21 +112,39 @@ public class ProfileForm : Form
         Controls.Add(browseBrowserBtn);
         Controls.Add(useSystemDefaultBtn);
 
-        Controls.Add(new Label { Text = "GitHub username (for Share links):", AutoSize = true, Location = new Point(20, 330) });
+        Controls.Add(new Label { Text = "GitHub username (for Share links):", AutoSize = true, Location = new Point(20, 332) });
         Controls.Add(_gitHubUsernameBox);
         Controls.Add(new Label
         {
             Text = "Used to build \"Share Account\" links: https://<username>.github.io/PersonalVault/share/. " +
                    "Leave blank to disable the Share... button. See README for one-time GitHub Pages setup.",
             AutoSize = false,
-            Location = new Point(20, 372),
+            Location = new Point(20, 378),
             Width = 350,
-            Height = 40,
+            Height = 58,
             ForeColor = Color.DimGray
         });
 
-        var cancelButton = new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel, Location = new Point(230, 420) };
-        var saveButton = new Button { Text = "Save", AutoSize = true, Location = new Point(315, 420) };
+        var masterPasswordLabel = new Label { Text = "Master password:", AutoSize = true, Location = new Point(20, 448), Visible = _changeMasterSecret != null };
+        var changeSecretButton = new Button { Text = "Change Master Password...", AutoSize = true, Location = new Point(20, 468), Visible = _changeMasterSecret != null };
+        changeSecretButton.Click += (_, _) => _changeMasterSecret?.Invoke();
+        var changeSecretNote = new Label
+        {
+            Text = "Re-encrypts your entire vault under a new secret. You'll be asked for the " +
+                   "current one first.",
+            AutoSize = false,
+            Location = new Point(20, 498),
+            Width = 350,
+            Height = 32,
+            ForeColor = Color.DimGray,
+            Visible = _changeMasterSecret != null
+        };
+        Controls.Add(masterPasswordLabel);
+        Controls.Add(changeSecretButton);
+        Controls.Add(changeSecretNote);
+
+        var cancelButton = new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel, Location = new Point(230, 545) };
+        var saveButton = new Button { Text = "Save", AutoSize = true, Location = new Point(315, 545) };
         saveButton.Click += SaveButton_Click;
         Controls.Add(cancelButton);
         Controls.Add(saveButton);
