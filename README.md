@@ -34,9 +34,17 @@ This is a working v2 - see "What's next" below for what's still just an idea.
   etc.) automatically roll their due date forward once flagged as overdue.
 - **Always running**: it's a tray app (no taskbar window) with an optional "Start with
   Windows" toggle in the tray menu, on by default for new installs.
-- **Changing the secret**: tray menu → "Change Master Secret..." re-encrypts the
-  *entire* vault file under a brand-new key (and new random salt) in one step, then
-  re-uploads it to Drive.
+- **Changing the secret**: tray menu → "Change Master Secret..." (or Profile → "Change
+  Master Password...", same dialog) re-encrypts the *entire* vault file under a
+  brand-new key (and new random salt) in one step, then re-uploads it to Drive. A new
+  secret must meet the same 12-character/uppercase/lowercase/symbol requirement as
+  creating a vault - see "First run" below.
+- **Credit card details**: for a `CreditCard`-category entry, click **Card
+  Details...** in the account editor for a structured popup (card number formatted as
+  you type, expiration month/year dropdowns, security code, cardholder name) instead of
+  typing them into Extra info by hand. The card number writes into the entry's own
+  Account # field; the rest are stored as Extra info fields under the hood - no new
+  vault schema, so older entries are unaffected.
 - **Auto-lock**: after 10 minutes (by default) with no keyboard/mouse activity
   *anywhere on the system* (not just in this app - the same signal every mainstream
   password manager uses), the vault locks itself: the window hides if open, and the
@@ -121,11 +129,13 @@ PersonalVault/
   Forms/UnlockForm.cs         Enter/create the master secret
   Forms/MainForm.cs           Account list (search, add/edit/delete/copy, export/import, profile)
   Forms/AccountEditForm.cs    Add/edit a single account, incl. category-specific suggested fields
+  Forms/CreditCardDetailsForm.cs  "Card Details..." popup for the CreditCard category
   Forms/BankAccountsForm.cs   Checking/Savings/Money Market list for a BankAccount entry
   Forms/BankSubAccountForm.cs Add/edit one bank sub-account
   Forms/ProfileForm.cs        Edit the vault owner's name/picture
   Forms/SettingsForm.cs       Edit AutoLockMinutes / reminder days / Start with Windows
   Forms/ChangeSecretForm.cs   Change the master secret
+  Security/PasswordPolicy.cs  Minimum-strength rule for a new/changed master secret
   Forms/ShareAccountForm.cs   "Share Account" dialog - pick expiration, get a link
   Forms/SharedLinksForm.cs    "Shared Links..." - list/revoke active share links
   Forms/TrayApplicationContext.cs   Owns the tray icon and ties everything together
