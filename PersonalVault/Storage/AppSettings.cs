@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Threading;
 
 namespace PersonalVault.Storage;
 
@@ -72,6 +73,26 @@ public class AppSettings
     {
         AppPaths.EnsureFoldersExist();
         var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(AppPaths.SettingsPath, json);
+
+        // settings.json is small and gets rewritten often (every preference change), so
+        // it's a plausible target for a momentary exclusive lock from antivirus/search
+        // indexing/cloud-sync software reacting to the previous write - a few quick
+        // retries smooths over that without the caller needing to know it happened. If
+        // every attempt fails, the last exception propagates - see
+        // TrayApplicationContext.SaveSettings for how that's surfaced to the user
+        // instead of crashing the app.
+        const int maxAttempts = 5;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                File.WriteAllText(AppPaths.SettingsPath, json);
+                return;
+            }
+            catch (IOException) when (attempt < maxAttempts)
+            {
+                Thread.Sleep(100);
+            }
+        }
     }
 }

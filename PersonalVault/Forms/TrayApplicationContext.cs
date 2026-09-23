@@ -968,7 +968,21 @@ public class TrayApplicationContext : ApplicationContext
     /// </summary>
     private void SaveSettings()
     {
-        _settings.Save();
+        try
+        {
+            _settings.Save();
+        }
+        catch (Exception ex)
+        {
+            // A settings-save failure (e.g. the file was momentarily locked by another
+            // process and AppSettings.Save's own retries didn't outlast it) must never
+            // crash the whole app - this used to propagate straight up through a Button
+            // click handler and take down the entire WinForms message loop.
+            DebugLog.WriteException("SaveSettings (non-fatal - the app keeps running with this change only in memory)", ex);
+            Notify("Personal Vault", "Could not save settings: " + ex.Message, ToolTipIcon.Warning);
+            return; // Don't try to upload a save that didn't actually happen locally.
+        }
+
         _ = UploadSettingsToDriveAsync();
     }
 
