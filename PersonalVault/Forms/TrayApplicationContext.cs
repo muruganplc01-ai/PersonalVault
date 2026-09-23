@@ -37,6 +37,7 @@ public class TrayApplicationContext : ApplicationContext
     private ToolStripMenuItem? _startupMenuItem;
     private ToolStripMenuItem? _driveMenuItem;
     private bool _warnedNotSignedInThisSession;
+    private bool _offeredEmptyVaultDriveRestoreThisSession;
 
     /// <summary>
     /// Exists purely so ShowMainForm() has a reliable way to hop onto the UI thread.
@@ -433,6 +434,19 @@ public class TrayApplicationContext : ApplicationContext
                 if (connect == DialogResult.Yes)
                     await SignInToDriveAsync();
             }
+
+            // Whether just connected above, silently re-authenticated from a cached
+            // token, or already connected from earlier this session, catch the specific
+            // bug this was written to fix: a vault that's never actually been used
+            // (zero accounts) while Drive already has a real one - happens whenever a
+            // vault gets created locally before Drive was ever connected (e.g.
+            // credentials.json wasn't in the data folder yet at this exact startup, so
+            // the firstRun disaster-recovery check above had nothing to check against).
+            // Doing this BEFORE the automatic SyncNowAsync call below matters: without
+            // it, that silent sync could decide the empty local vault is "newer" than
+            // Drive's real one purely by file timestamp and push it, overwriting the
+            // Drive backup with nothing asked.
+            await OfferDriveRestoreIfLocalVaultLooksEmptyAsync();
 
             if (_drive.IsAuthenticated)
             {
@@ -1069,6 +1083,43 @@ public class TrayApplicationContext : ApplicationContext
             return;
         }
 
+        // Defense-in-depth against the same bug OfferDriveRestoreIfLocalVaultLooksEmptyAsync
+        // fixes at sign-in time: an empty local vault's file timestamp is often "now" (it
+        // was just created), which would otherwise look "newer" than Drive's real copy
+        // below and get pushed, overwriting it. Skipped if the user already went through
+        // that check this session (accepted OR explicitly declined it) - an explicit "No,
+        // keep this empty vault" is an informed decision this method should respect, not
+        // silently override.
+        if (_vault!.Accounts.Count == 0 && !_offeredEmptyVaultDriveRestoreThisSession)
+        {
+            try
+            {
+                var remoteBytesCheck = await _drive.DownloadAsync(_driveFileId);
+                var remoteData = VaultStorage.LoadFromBytes(remoteBytesCheck, _secret!);
+                if (remoteData.Accounts.Count > 0)
+                {
+                    DebugLog.Write("SyncNowAsync: local vault has zero accounts and Drive's copy has real data - pulling instead of comparing timestamps.");
+                    _vault = remoteData;
+                    File.WriteAllBytes(AppPaths.VaultLocalPath, remoteBytesCheck);
+                    _mainForm?.RefreshData(_vault);
+                    _offeredEmptyVaultDriveRestoreThisSession = true;
+                    if (!silent) MessageBox.Show(
+                        "Your local vault was empty - pulled the existing copy from Google Drive instead of overwriting it.",
+                        "Personal Vault");
+                    return;
+                }
+            }
+            catch (CryptographicException)
+            {
+                // Drive's vault uses a different secret than the one currently unlocked -
+                // can't reconcile automatically. Fall through to the normal timestamp
+                // logic below (which will likely push the empty vault) - the manual
+                // recovery path (delete the local vault file and restart) is the way to
+                // actually restore a backup secured with a different secret.
+                DebugLog.Write("SyncNowAsync: remote vault decrypt failed with the current secret - can't compare, falling through to normal sync logic.");
+            }
+        }
+
         var remoteModified = await _drive.GetRemoteModifiedTimeAsync(_driveFileId);
         var localModified = File.Exists(AppPaths.VaultLocalPath)
             ? File.GetLastWriteTimeUtc(AppPaths.VaultLocalPath)
@@ -1110,6 +1161,13 @@ public class TrayApplicationContext : ApplicationContext
             }
             _warnedNotSignedInThisSession = false; // give the modal warning another chance if this connection later drops
             Notify("Personal Vault", "Signed in to Google Drive.");
+
+            // This is the fix for the actual bug: connecting Drive manually, mid-session,
+            // after a vault was already created locally (e.g. credentials.json wasn't in
+            // place yet at startup) used to just authenticate and stop there - nothing
+            // ever checked whether a real vault was already sitting on Drive. See
+            // OfferDriveRestoreIfLocalVaultLooksEmptyAsync for the full explanation.
+            await OfferDriveRestoreIfLocalVaultLooksEmptyAsync();
         }
         catch (Exception ex)
         {
@@ -1123,6 +1181,69 @@ public class TrayApplicationContext : ApplicationContext
             // Whatever happened above (success, declined credentials, or an error), the
             // tray menu should always reflect the true current state afterward.
             UpdateDriveMenuState();
+        }
+    }
+
+    /// <summary>
+    /// Catches a vault that looks like it's never actually been used (zero accounts)
+    /// while Drive already has a real one - the scenario that caused a real data-loss
+    /// near-miss: a vault got created locally before Drive was connected (e.g.
+    /// credentials.json wasn't in the data folder yet at that exact startup, so
+    /// InitializeAsync's own firstRun disaster-recovery check had no credentials to act
+    /// on and skipped straight to creating a new, empty vault), and by the time Drive
+    /// was connected - either by a later silent re-authentication at startup or a manual
+    /// "Sign in to Google Drive" click - there was no longer any "no local vault file
+    /// yet" moment left to trigger the normal restore check.
+    ///
+    /// Deliberately does nothing if the current vault already has real accounts in it -
+    /// this should never interrupt someone who's actually been using the app locally
+    /// and is only now getting around to connecting Drive. The one-time-per-session
+    /// guard means whichever caller runs first (InitializeAsync's startup check or a
+    /// manual sign-in) "wins" and later callers this same session are silent no-ops, so
+    /// the user is never asked about the same vault twice in one run - including not
+    /// re-litigating an explicit "No, keep this empty vault" answer.
+    /// </summary>
+    private async Task OfferDriveRestoreIfLocalVaultLooksEmptyAsync()
+    {
+        if (_offeredEmptyVaultDriveRestoreThisSession) return;
+        if (_vault == null || _secret == null) return;
+        if (_vault.Accounts.Count > 0) return;
+        if (!_drive.IsAuthenticated) return;
+
+        _offeredEmptyVaultDriveRestoreThisSession = true; // set up front so this can never ask twice, even if something below throws
+
+        try
+        {
+            var remoteFileId = _driveFileId ?? _settings.DriveFileId ?? await _drive.FindVaultFileIdAsync();
+            if (remoteFileId == null) return; // Nothing on Drive yet either - this genuinely is a brand-new vault.
+
+            var remoteBytes = await _drive.DownloadAsync(remoteFileId);
+
+            var restore = MessageBox.Show(
+                "A vault already exists on Google Drive, but the one open right now has no " +
+                "accounts in it yet - this usually means it was created before Drive was " +
+                "connected.\n\n" +
+                "Restore the one from Google Drive instead? You'll need the master secret it " +
+                "was created with. Choose \"No\" to keep using this empty vault (it will " +
+                "overwrite the Drive copy the next time it syncs).",
+                "Personal Vault", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (restore != DialogResult.Yes) return;
+
+            if (RestoreVaultFromBytes(remoteBytes))
+            {
+                _driveFileId = remoteFileId;
+                _settings.DriveFileId = _driveFileId;
+                _settings.Save();
+                _mainForm?.RefreshData(_vault!);
+                Notify("Personal Vault", "Restored vault from Google Drive.");
+            }
+        }
+        catch (Exception ex)
+        {
+            // Non-fatal: worst case, this opportunistic check silently didn't happen -
+            // the manual recovery path (delete the local vault file and restart, so
+            // InitializeAsync's own firstRun check runs fresh) still works.
+            DebugLog.WriteException("OfferDriveRestoreIfLocalVaultLooksEmptyAsync (non-fatal)", ex);
         }
     }
 
