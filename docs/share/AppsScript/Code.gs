@@ -11,8 +11,11 @@
  * what makes a real one-time view possible without the recipient ever needing a Google
  * account or any Drive access of their own. Given a Drive file id, this serves that
  * file's bytes exactly once (base64-encoded, since a Web App's response body has to be
- * text) and deletes it (moves to Trash) in the same request, inside a lock so two
- * simultaneous requests for the same id can't both succeed.
+ * text) and moves it to Trash in the same request - explicitly checking isTrashed() on
+ * every subsequent request is what actually enforces "once" (getFileById alone does NOT
+ * throw for a trashed file, so skipping that check would let the same link keep working
+ * forever). A script-wide lock serializes requests so two simultaneous opens of the same
+ * link can't both succeed.
  *
  * The Drive file itself is never shared "anyone with the link" - it stays completely
  * private. Only this script (running as its owner) can ever read it, and only until
@@ -38,8 +41,17 @@ function doGet(e) {
     try {
       file = DriveApp.getFileById(id);
     } catch (notFoundError) {
-      // Already trashed by a previous request (consumed, expired, or manually
-      // revoked from the app) - this is the normal steady state once a share is gone.
+      // Permanently gone (expired/revoked by the desktop app, which deletes outright
+      // rather than trashing) - the normal steady state once a share is fully cleaned up.
+      return goneResponse();
+    }
+
+    // getFileById() does NOT throw for a file that's merely in the Trash - Drive still
+    // considers it a fetchable file, just hidden from normal views. Without this check,
+    // a link stays fully usable forever: setTrashed(true) below "succeeds" every time
+    // without ever actually blocking a later read. This is the real one-time-view
+    // enforcement; getFileById's throw above only catches permanent deletion.
+    if (file.isTrashed()) {
       return goneResponse();
     }
 
