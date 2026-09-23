@@ -1,0 +1,1037 @@
+<title>Personal Vault Share Link Setup</title>
+<style>
+  :root {
+    --paper: #f7f4ee;
+    --paper-raised: #ffffff;
+    --ink: #1e2430;
+    --ink-soft: #5b6472;
+    --rule: #ddd6c7;
+    --brass: #93672c;
+    --brass-strong: #7a5322;
+    --brass-wash: #f0e4cd;
+    --teal: #2f6b4f;
+    --teal-wash: #e3efe7;
+    --rust: #a34a24;
+    --rust-wash: #f6e6dc;
+    --mono-chip-bg: #eee9dc;
+    --mono-chip-ink: #4a4335;
+    --shadow: 0 1px 2px rgba(30,36,48,0.06), 0 8px 24px rgba(30,36,48,0.06);
+  }
+
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --paper: #14171d;
+      --paper-raised: #1c212a;
+      --ink: #ece8de;
+      --ink-soft: #a1a7b3;
+      --rule: #333a46;
+      --brass: #cf9f54;
+      --brass-strong: #e2b46e;
+      --brass-wash: #2c2418;
+      --teal: #7cc9a3;
+      --teal-wash: #16261e;
+      --rust: #e2895d;
+      --rust-wash: #2c1c14;
+      --mono-chip-bg: #262b34;
+      --mono-chip-ink: #cfd3da;
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #14171d;
+    --paper-raised: #1c212a;
+    --ink: #ece8de;
+    --ink-soft: #a1a7b3;
+    --rule: #333a46;
+    --brass: #cf9f54;
+    --brass-strong: #e2b46e;
+    --brass-wash: #2c2418;
+    --teal: #7cc9a3;
+    --teal-wash: #16261e;
+    --rust: #e2895d;
+    --rust-wash: #2c1c14;
+    --mono-chip-bg: #262b34;
+    --mono-chip-ink: #cfd3da;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    padding-inline: 20px;
+    padding-block: 48px 96px;
+  }
+
+  h1, h2, h3 { font-family: "Fraunces", Georgia, serif; text-wrap: balance; margin: 0; }
+
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--brass-strong);
+    background: var(--brass-wash);
+    border-radius: 999px;
+    padding: 5px 12px 5px 10px;
+    margin-bottom: 22px;
+  }
+  .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--brass); }
+
+  header h1 {
+    font-size: clamp(30px, 5vw, 42px);
+    font-weight: 600;
+    line-height: 1.08;
+    letter-spacing: -0.01em;
+  }
+
+  header .sub {
+    margin-top: 14px;
+    font-size: 17px;
+    color: var(--ink-soft);
+    max-width: 60ch;
+  }
+
+  .panel {
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    padding: 22px 24px;
+    margin-top: 28px;
+  }
+
+  .panel h2 {
+    font-size: 15px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--brass-strong);
+    margin-bottom: 10px;
+  }
+
+  .cost-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-top: 14px;
+  }
+  .cost-item .num {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--teal);
+    font-variant-numeric: tabular-nums;
+  }
+  .cost-item .label {
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-top: 2px;
+  }
+  @media (max-width: 520px) {
+    .cost-grid { grid-template-columns: 1fr; }
+  }
+
+  .steps {
+    margin-top: 40px;
+    position: relative;
+  }
+
+  .steps::before {
+    content: "";
+    position: absolute;
+    left: 21px;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    background: var(--rule);
+  }
+
+  .step {
+    position: relative;
+    padding-left: 60px;
+    margin-bottom: 34px;
+  }
+  .step:last-child { margin-bottom: 0; }
+
+  .step-badge {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--paper-raised);
+    border: 2px solid var(--brass);
+    color: var(--brass-strong);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-weight: 600;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow);
+  }
+
+  .step h3 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .crumb {
+    display: inline-flex;
+    align-items: center;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12.5px;
+    color: var(--mono-chip-ink);
+    background: var(--mono-chip-bg);
+    border-radius: 6px;
+    padding: 4px 9px;
+    margin-bottom: 12px;
+  }
+
+  .step p { margin: 10px 0 0; }
+  .step ul, .step ol { margin: 10px 0 0; padding-left: 22px; }
+  .step li { margin-bottom: 6px; }
+
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.92em;
+    background: var(--mono-chip-bg);
+    color: var(--mono-chip-ink);
+    padding: 0.1em 0.4em;
+    border-radius: 4px;
+  }
+
+  details.codebox {
+    margin-top: 12px;
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  details.codebox summary {
+    cursor: pointer;
+    padding: 10px 14px;
+    background: var(--brass-wash);
+    color: var(--brass-strong);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 13px;
+    font-weight: 600;
+    list-style: none;
+  }
+  details.codebox summary::-webkit-details-marker { display: none; }
+  details.codebox summary::before { content: "▸ "; }
+  details.codebox[open] summary::before { content: "▾ "; }
+  details.codebox pre {
+    margin: 0;
+    padding: 14px;
+    background: var(--mono-chip-bg);
+    color: var(--mono-chip-ink);
+    overflow-x: auto;
+    font-size: 12px;
+    line-height: 1.5;
+    max-height: 480px;
+    overflow-y: auto;
+  }
+  details.codebox pre code { background: none; padding: 0; }
+
+  .callout {
+    margin-top: 14px;
+    border-radius: 10px;
+    padding: 13px 16px;
+    font-size: 14.5px;
+    display: flex;
+    gap: 10px;
+  }
+  .callout .icon { flex: none; font-size: 15px; line-height: 1.5; }
+  .callout.gotcha { background: var(--rust-wash); color: var(--rust); }
+  .callout.gotcha strong { color: var(--rust); }
+  .callout.note { background: var(--mono-chip-bg); color: var(--ink-soft); }
+  .callout.done { background: var(--teal-wash); color: var(--teal); }
+  .callout p, .callout span { margin: 0; }
+  .callout b { color: inherit; }
+
+  .trouble {
+    margin-top: 44px;
+  }
+  .trouble h2 {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .trouble .sub { color: var(--ink-soft); margin-bottom: 20px; font-size: 14.5px; }
+
+  .qa {
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow);
+  }
+  .qa .q {
+    font-weight: 600;
+    font-size: 15px;
+    display: flex;
+    gap: 8px;
+  }
+  .qa .q .mark {
+    color: var(--rust);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  .qa .a { margin-top: 6px; font-size: 14.5px; color: var(--ink-soft); }
+  .qa .a code { font-size: 0.9em; }
+
+  footer {
+    margin-top: 48px;
+    padding-top: 22px;
+    border-top: 1px solid var(--rule);
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow"><span class="dot"></span>Self-service, own accounts, no dependency on the original owner</div>
+    <h1>Set up your own one-time Share links</h1>
+    <p class="sub">
+      This is only needed if you want to use Personal Vault's <b>Share...</b> button to
+      hand someone a real one-time link to a single password (first open consumes it,
+      dead everywhere after). Skip this entirely and every other feature - including
+      Google Drive backup - still works normally. Everything below runs on your own
+      GitHub and Google accounts; nothing here depends on whoever gave you the app.
+    </p>
+  </header>
+
+  <div class="panel">
+    <h2>Cost &amp; ownership, up front</h2>
+    <div class="cost-grid">
+      <div class="cost-item">
+        <div class="num">$0</div>
+        <div class="label">GitHub Pages + Google Apps Script are both free</div>
+      </div>
+      <div class="cost-item">
+        <div class="num">~15 min</div>
+        <div class="label">One-time setup, mostly copy/paste</div>
+      </div>
+      <div class="cost-item">
+        <div class="num">Yours</div>
+        <div class="label">Your own repo, your own script - nobody else's business</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="steps">
+
+    <div class="step">
+      <div class="step-badge">1</div>
+      <span class="crumb">github.com → New repository</span>
+      <h3>Create a new public GitHub repository</h3>
+      <p>
+        Any name, e.g. <code>my-vault-share</code>. It needs to be <b>public</b> - GitHub
+        Pages' free tier only serves public repos. Nothing sensitive ever lives in it:
+        the page below only ever handles already-encrypted data and a link with no
+        secret baked into the page itself.
+      </p>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">2</div>
+      <span class="crumb">In your new repo</span>
+      <h3>Add the viewer page</h3>
+      <p>
+        Create a file at <code>docs/share/index.html</code> in your new repo and paste in
+        the content below exactly as-is.
+      </p>
+      <details class="codebox">
+        <summary>docs/share/index.html (click to expand, then copy all)</summary>
+        <pre><code>&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+&lt;meta charset="UTF-8"&gt;
+&lt;meta name="viewport" content="width=device-width, initial-scale=1.0"&gt;
+&lt;meta name="robots" content="noindex, nofollow"&gt;
+&lt;title&gt;Personal Vault - Shared Account&lt;/title&gt;
+&lt;style&gt;
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f6f8;
+    --card-bg: #ffffff;
+    --text: #1a2230;
+    --muted: #5b6572;
+    --border: #dde3ea;
+    --accent: #2f6fed;
+    --danger: #b3261e;
+    --danger-bg: #fdecea;
+    --ok-bg: #eef6ff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1420;
+      --card-bg: #171e2c;
+      --text: #e7ecf3;
+      --muted: #9aa7b8;
+      --border: #2a3446;
+      --accent: #6ea1ff;
+      --danger: #ff8a80;
+      --danger-bg: #3a1f1d;
+      --ok-bg: #16233a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  body {
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px;
+    min-height: 100vh;
+  }
+  .card {
+    width: 100%;
+    max-width: 520px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    height: fit-content;
+  }
+  h1 {
+    font-size: 18px;
+    margin: 0 0 4px 0;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 13px;
+    margin: 0 0 20px 0;
+  }
+  .field {
+    margin-bottom: 14px;
+  }
+  .sub-account {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 14px 2px 14px;
+    margin-bottom: 14px;
+  }
+  .sub-account-heading {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  .field-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .field-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    background: transparent;
+  }
+  .field-value {
+    flex: 1;
+    font-size: 14px;
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+  .field-value.monospace {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  button.copy-btn, button.toggle-btn {
+    border: none;
+    background: transparent;
+    color: var(--accent);
+    font-size: 13px;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 6px;
+    white-space: nowrap;
+  }
+  button.copy-btn:hover, button.toggle-btn:hover {
+    background: var(--ok-bg);
+  }
+  .notice {
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 13px;
+    margin-bottom: 18px;
+  }
+  .notice.expiry {
+    background: var(--ok-bg);
+    color: var(--text);
+  }
+  .notice.error {
+    background: var(--danger-bg);
+    color: var(--danger);
+  }
+  .center-message {
+    text-align: center;
+    color: var(--muted);
+    padding: 40px 12px;
+  }
+  .center-message h1 {
+    color: var(--text);
+  }
+  footer {
+    margin-top: 18px;
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+  }
+  .hidden { display: none !important; }
+&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+  &lt;div class="card" id="card"&gt;
+    &lt;div id="loading" class="center-message"&gt;
+      &lt;h1&gt;Loading...&lt;/h1&gt;
+      &lt;p&gt;Decrypting the shared account.&lt;/p&gt;
+    &lt;/div&gt;
+
+    &lt;div id="error" class="center-message hidden"&gt;
+      &lt;h1&gt;This link has expired or already been used&lt;/h1&gt;
+      &lt;p id="errorDetail"&gt;The linked data is no longer available. Ask whoever shared it with you to send a new link.&lt;/p&gt;
+    &lt;/div&gt;
+
+    &lt;div id="content" class="hidden"&gt;
+      &lt;h1 id="accountName"&gt;&lt;/h1&gt;
+      &lt;p class="subtitle" id="accountCategory"&gt;&lt;/p&gt;
+      &lt;div id="expiryNotice" class="notice expiry"&gt;&lt;/div&gt;
+      &lt;div id="fields"&gt;&lt;/div&gt;
+      &lt;footer&gt;
+        Decrypted entirely in your browser - the decryption key was never sent to any server.
+      &lt;/footer&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+
+&lt;script&gt;
+(function () {
+  "use strict";
+
+  // ---------------------------------------------------------------------
+  // One-time setup: deploy docs/share/AppsScript/Code.gs as a Google Apps Script
+  // Web App (Deploy -&gt; New deployment -&gt; Web app -&gt; Execute as: Me -&gt; Who has
+  // access: Anyone), then paste its "/exec" URL here. The script runs under the
+  // vault owner's own Google account regardless of who calls it, which is what
+  // makes a real one-time view possible: it deletes the Drive file the instant
+  // it's first successfully served, so a share link this page hands you either
+  // wasn't reachable at all directly (the Drive file is never public) or dies
+  // the moment anyone actually opens it - unlike a plain API key, nothing here
+  // is a secret worth restricting, since the script only ever does one useful
+  // thing for a stranger: serve one file, once, then destroy it.
+  // ---------------------------------------------------------------------
+  var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyv3GeH7EqHLsh1Hn3HWmuX-a3nvsH4HDPU0G83M2R3Q71BpHbNCHrnAcdirJsxHB8/exec";
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function showError(detail) {
+    $("loading").classList.add("hidden");
+    $("content").classList.add("hidden");
+    $("error").classList.remove("hidden");
+    if (detail) $("errorDetail").textContent = detail;
+  }
+
+  function base64ToBytes(b64) {
+    var binary = atob(b64);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i &lt; binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  function base64UrlToBytes(b64url) {
+    var b64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4 !== 0) b64 += "=";
+    return base64ToBytes(b64);
+  }
+
+  function bytesToUtf8(bytes) {
+    return new TextDecoder("utf-8").decode(bytes);
+  }
+
+  // Blob layout written by PersonalVault/Security/ShareCrypto.cs:
+  //   "PVSH" (4 bytes) | version (1 byte) | nonce (12 bytes) | ciphertext (N) | tag (16 bytes)
+  // Everything from the nonce onward except the nonce itself (ciphertext+tag,
+  // in that order) is handed to crypto.subtle.decrypt as one buffer, which is
+  // exactly what the Web Crypto AES-GCM API expects.
+  function parseBlob(bytes) {
+    var magic = bytesToUtf8(bytes.slice(0, 4));
+    if (magic !== "PVSH") throw new Error("Not a recognized Personal Vault share.");
+    var version = bytes[4];
+    if (version !== 1) throw new Error("Unsupported share format version: " + version);
+    var nonce = bytes.slice(5, 17);
+    var ciphertextAndTag = bytes.slice(17);
+    return { nonce: nonce, ciphertextAndTag: ciphertextAndTag };
+  }
+
+  function copyToClipboard(text, button) {
+    var original = button.textContent;
+    var done = function () {
+      button.textContent = "Copied";
+      setTimeout(function () { button.textContent = original; }, 1500);
+    };
+    if (navigator.clipboard &amp;&amp; navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text); done(); });
+    } else {
+      fallbackCopy(text);
+      done();
+    }
+  }
+
+  function fallbackCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); } catch (e) { /* best-effort only */ }
+    document.body.removeChild(ta);
+  }
+
+  function addField(label, value, opts, container) {
+    opts = opts || {};
+    container = container || $("fields");
+    if (!value) return;
+
+    var field = document.createElement("div");
+    field.className = "field";
+
+    var labelEl = document.createElement("div");
+    labelEl.className = "field-label";
+    labelEl.textContent = label;
+    field.appendChild(labelEl);
+
+    var row = document.createElement("div");
+    row.className = "field-row";
+
+    var valueEl = document.createElement("div");
+    valueEl.className = "field-value" + (opts.monospace ? " monospace" : "");
+    var displayValue = value;
+    var isSecret = !!opts.secret;
+    valueEl.textContent = isSecret ? "••••••••••" : displayValue;
+    row.appendChild(valueEl);
+
+    if (isSecret) {
+      var toggleBtn = document.createElement("button");
+      toggleBtn.className = "toggle-btn";
+      toggleBtn.type = "button";
+      toggleBtn.textContent = "Show";
+      var shown = false;
+      toggleBtn.onclick = function () {
+        shown = !shown;
+        valueEl.textContent = shown ? displayValue : "••••••••••";
+        toggleBtn.textContent = shown ? "Hide" : "Show";
+      };
+      row.appendChild(toggleBtn);
+    }
+
+    var copyBtn = document.createElement("button");
+    copyBtn.className = "copy-btn";
+    copyBtn.type = "button";
+    copyBtn.textContent = "Copy";
+    copyBtn.onclick = function () { copyToClipboard(displayValue, copyBtn); };
+    row.appendChild(copyBtn);
+
+    field.appendChild(row);
+    container.appendChild(field);
+  }
+
+  function formatCurrency(amount) {
+    var n = Number(amount);
+    return isNaN(n) ? String(amount) : "$" + n.toFixed(2);
+  }
+
+  function addSubAccounts(subAccounts) {
+    if (!subAccounts || !subAccounts.length) return;
+
+    subAccounts.forEach(function (sub) {
+      var section = document.createElement("div");
+      section.className = "sub-account";
+
+      var heading = document.createElement("div");
+      heading.className = "sub-account-heading";
+      heading.textContent = sub.Label || "Account";
+      section.appendChild(heading);
+
+      $("fields").appendChild(section);
+
+      addField("Account Number", sub.AccountNumber, { monospace: true }, section);
+      addField("Routing Number", sub.RoutingNumber, { monospace: true }, section);
+
+      var balanceText = null;
+      if (sub.Balance !== null &amp;&amp; sub.Balance !== undefined) {
+        balanceText = formatCurrency(sub.Balance);
+        if (sub.BalanceAsOf) balanceText += " (as of " + new Date(sub.BalanceAsOf).toLocaleDateString() + ")";
+      }
+      addField("Balance", balanceText, {}, section);
+      addField("Notes", sub.Notes, {}, section);
+    });
+  }
+
+  function render(payload) {
+    $("accountName").textContent = payload.Name || "(unnamed account)";
+    $("accountCategory").textContent = [payload.Category, payload.Institution].filter(Boolean).join(" - ");
+
+    if (payload.ExpiresUtc) {
+      var expires = new Date(payload.ExpiresUtc);
+      $("expiryNotice").textContent = "This link expires " + expires.toLocaleString() +
+        " (or sooner if revoked). Save anything you need before then.";
+    } else {
+      $("expiryNotice").classList.add("hidden");
+    }
+
+    addField("Username", payload.UserName);
+    addField("Password", payload.Password, { secret: true, monospace: true });
+    addField("Account Number", payload.AccountNumber, { monospace: true });
+    addField("Website", payload.Website);
+    addField("Phone Number", payload.PhoneNumber);
+    addField("Notes", payload.Notes);
+
+    if (payload.ExtraFields) {
+      Object.keys(payload.ExtraFields).forEach(function (key) {
+        addField(key, payload.ExtraFields[key]);
+      });
+    }
+
+    addSubAccounts(payload.SubAccounts);
+
+    $("loading").classList.add("hidden");
+    $("content").classList.remove("hidden");
+  }
+
+  async function main() {
+    var hash = window.location.hash.replace(/^#/, "");
+    var params = new URLSearchParams(hash);
+    var id = params.get("id");
+    var key = params.get("key");
+
+    if (!id || !key) {
+      showError("This link is missing required information and cannot be opened.");
+      return;
+    }
+
+    var response;
+    try {
+      var url = APPS_SCRIPT_URL + "?id=" + encodeURIComponent(id);
+      response = await fetch(url);
+    } catch (e) {
+      showError("Could not reach the share service. Check your internet connection and try again.");
+      return;
+    }
+
+    if (!response.ok) {
+      showError();
+      return;
+    }
+
+    // The Apps Script endpoint has already deleted the Drive file by the time this
+    // response arrives (it consumes on read, inside a lock - see Code.gs) - "GONE"
+    // means either it never existed, already expired/was revoked, or someone else
+    // (possibly this same browser, on a reload) already opened this exact link once.
+    var bodyText = (await response.text()).trim();
+    if (bodyText === "GONE") {
+      showError();
+      return;
+    }
+
+    var blobBytes;
+    try {
+      blobBytes = base64ToBytes(bodyText);
+    } catch (e) {
+      showError("This link's data could not be read.");
+      return;
+    }
+
+    var parsed;
+    try {
+      parsed = parseBlob(blobBytes);
+    } catch (e) {
+      showError("This link's data could not be read (" + e.message + ").");
+      return;
+    }
+
+    var keyBytes = base64UrlToBytes(key);
+    var cryptoKey;
+    try {
+      cryptoKey = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["decrypt"]);
+    } catch (e) {
+      showError("This link's key is invalid.");
+      return;
+    }
+
+    var plaintextBuffer;
+    try {
+      plaintextBuffer = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: parsed.nonce, tagLength: 128 },
+        cryptoKey,
+        parsed.ciphertextAndTag);
+    } catch (e) {
+      showError("This link's key does not match its data - the link may be corrupted.");
+      return;
+    }
+
+    var payload;
+    try {
+      payload = JSON.parse(bytesToUtf8(new Uint8Array(plaintextBuffer)));
+    } catch (e) {
+      showError("The decrypted data was not in the expected format.");
+      return;
+    }
+
+    render(payload);
+  }
+
+  main().catch(function () {
+    showError();
+  });
+})();
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+      </details>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">3</div>
+      <span class="crumb">Repo → Settings → Pages</span>
+      <h3>Enable GitHub Pages</h3>
+      <p>
+        <b>Settings → Pages → Source → Deploy from a branch → Branch: <code>main</code>,
+        Folder: <code>/docs</code></b> → Save. GitHub gives you a URL like
+        <code>https://yourusername.github.io/my-vault-share/</code>.
+      </p>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">4</div>
+      <span class="crumb">script.google.com → New project</span>
+      <h3>Deploy the Apps Script Web App</h3>
+      <p>
+        Delete the default placeholder code in <code>Code.gs</code> and paste in the
+        content below instead.
+      </p>
+      <details class="codebox">
+        <summary>Code.gs (click to expand, then copy all)</summary>
+        <pre><code>/**
+ * Personal Vault - Share Account one-time-view backend.
+ *
+ * Deploy this as a Google Apps Script Web App (script.google.com -&gt; New project -&gt;
+ * paste this file's contents over Code.gs -&gt; Deploy -&gt; New deployment -&gt; Web app -&gt;
+ * "Execute as: Me", "Who has access: Anyone" -&gt; paste the resulting .../exec URL into
+ * docs/share/index.html's APPS_SCRIPT_URL constant). See README.md's "Sharing an
+ * account (one-time link)" section for the full walkthrough.
+ *
+ * Runs under the vault owner's own Google account regardless of who calls it - that's
+ * what makes a real one-time view possible without the recipient ever needing a Google
+ * account or any Drive access of their own. Given a Drive file id, this serves that
+ * file's bytes exactly once (base64-encoded, since a Web App's response body has to be
+ * text) and moves it to Trash in the same request - explicitly checking isTrashed() on
+ * every subsequent request is what actually enforces "once" (getFileById alone does NOT
+ * throw for a trashed file, so skipping that check would let the same link keep working
+ * forever). A script-wide lock serializes requests so two simultaneous opens of the same
+ * link can't both succeed.
+ *
+ * The Drive file itself is never shared "anyone with the link" - it stays completely
+ * private. Only this script (running as its owner) can ever read it, and only until
+ * the first successful read consumes it.
+ */
+function doGet(e) {
+  var id = e &amp;&amp; e.parameter &amp;&amp; e.parameter.id;
+  if (!id) return goneResponse();
+
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (lockError) {
+    // Another request is already handling this (or some other) id - rather than risk
+    // two requests both reading the same not-yet-deleted file, treat a lock timeout the
+    // same as "gone". The other request either succeeds or fails on its own; this one
+    // simply doesn't get to serve the file.
+    return goneResponse();
+  }
+
+  try {
+    var file;
+    try {
+      file = DriveApp.getFileById(id);
+    } catch (notFoundError) {
+      // Permanently gone (expired/revoked by the desktop app, which deletes outright
+      // rather than trashing) - the normal steady state once a share is fully cleaned up.
+      return goneResponse();
+    }
+
+    // getFileById() does NOT throw for a file that's merely in the Trash - Drive still
+    // considers it a fetchable file, just hidden from normal views. Without this check,
+    // a link stays fully usable forever: setTrashed(true) below "succeeds" every time
+    // without ever actually blocking a later read. This is the real one-time-view
+    // enforcement; getFileById's throw above only catches permanent deletion.
+    if (file.isTrashed()) {
+      return goneResponse();
+    }
+
+    var bytes = file.getBlob().getBytes();
+    var base64 = Utilities.base64Encode(bytes);
+
+    // Trash rather than permanently delete - recoverable from Drive's Trash for 30
+    // days if something ever goes wrong, same "non-destructive by default" spirit as
+    // the rest of this app (see VaultStorage's atomic writes, GoogleDriveSync's
+    // rolling revision backups, etc).
+    file.setTrashed(true);
+
+    return ContentService.createTextOutput(base64).setMimeType(ContentService.MimeType.TEXT);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function goneResponse() {
+  return ContentService.createTextOutput("GONE").setMimeType(ContentService.MimeType.TEXT);
+}
+</code></pre>
+      </details>
+      <p>Save (Ctrl+S), then <b>Deploy → New deployment</b>:</p>
+      <ul>
+        <li>Select type - <b>Web app</b></li>
+        <li><b>Execute as: Me</b> (your own Google account - this is what lets it read a
+          private Drive file on a stranger's behalf)</li>
+        <li><b>Who has access: Anyone</b> (not "Anyone with a Google account" - recipients
+          must not need to sign in to anything)</li>
+      </ul>
+      <p>Deploy, authorize when asked (it needs Drive access to read/delete share files),
+        then copy the <b>Web app URL</b> it gives you - looks like
+        <code>https://script.google.com/macros/s/AKfycb.../exec</code>.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">5</div>
+      <span class="crumb">Back in your repo</span>
+      <h3>Wire the Apps Script URL into your viewer page</h3>
+      <p>
+        Open <code>docs/share/index.html</code> again, find
+        <code>APPS_SCRIPT_URL = "https://script.google.com/macros/s/YOUR-DEPLOYMENT-ID/exec"</code>
+        near the top of the <code>&lt;script&gt;</code>, and replace it with your own URL
+        from step 4. Commit the change - GitHub Pages redeploys automatically.
+      </p>
+      <div class="callout note">
+        <span class="icon">✨</span>
+        <span>This URL isn't a secret to protect - the only thing anyone could do by
+        knowing it is trigger the same "serve once, then delete" behavior the page
+        already relies on.</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">6</div>
+      <span class="crumb">PersonalVault → Profile...</span>
+      <h3>Set your GitHub username in the app</h3>
+      <p>
+        <b>GitHub username (for Share links)</b> → enter the same username from your
+        Pages URL in step 3 → <b>Save</b>. This is what the app uses to build
+        <code>https://&lt;username&gt;.github.io/&lt;your-repo&gt;/share/</code> links.
+      </p>
+      <div class="callout gotcha">
+        <span class="icon">⚠️</span>
+        <span>The app assumes your repo is named exactly <code>PersonalVault</code> with
+        Pages served from <code>/docs</code>. If you named your repo something else in
+        step 1, the link the app builds won't match your real Pages URL - name your repo
+        <code>PersonalVault</code> to avoid this entirely.</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">7</div>
+      <span class="crumb">Try it</span>
+      <h3>Test it end to end</h3>
+      <ol>
+        <li>Sign in to Google Drive first (tray menu) - sharing needs somewhere to host
+          the encrypted link.</li>
+        <li>Select any account → <b>Share...</b> → shortest expiration → <b>Create
+          Link</b>.</li>
+        <li>Open the link once - it should show the account's details.</li>
+        <li>Reopen or refresh the same link - it should say "expired or already been
+          used." That's the real one-time-view working.</li>
+      </ol>
+      <div class="callout done">
+        <span class="icon">✓</span>
+        <span>Done when step 4 shows details and step 5 shows "expired or already been
+        used" for the same link.</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="trouble">
+    <h2>Troubleshooting</h2>
+    <div class="sub">Real snags hit setting this up the first time.</div>
+
+    <div class="qa">
+      <div class="q"><span class="mark">?</span> The link keeps working even after I open it</div>
+      <div class="a">Make sure you deployed a <b>new version</b> of the Apps Script after
+      pasting the code (Deploy → Manage deployments → pencil icon → Version: New version
+      → Deploy) - editing <code>Code.gs</code> alone does not update an already-live
+      deployment.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="mark">?</span> "GONE" shows up even on the very first open</div>
+      <div class="a">Double-check the Apps Script deployment's access is set to
+      <b>Anyone</b>, not "Anyone with a Google account" - the wrong setting blocks
+      anonymous requests entirely, which looks identical to "already consumed" from the
+      viewer page.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="mark">?</span> Will I get charged for any of this?</div>
+      <div class="a">No. GitHub Pages and Google Apps Script are both free for this kind
+      of personal use - no billing account or card required for either.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="mark">?</span> Can I delete this later?</div>
+      <div class="a">Yes - it's entirely your own repo and your own script. Delete the
+      GitHub repo or the Apps Script deployment anytime without affecting anyone else.</div>
+    </div>
+  </div>
+
+  <footer>
+    <span>Personal Vault — self-service Share link setup</span>
+    <span>Own repo, own script, own accounts throughout</span>
+  </footer>
+
+</div>

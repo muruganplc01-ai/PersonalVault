@@ -1,0 +1,419 @@
+<title>Sharing Personal Vault With a Friend</title>
+<style>
+  :root {
+    --paper: #f7f4ee;
+    --paper-raised: #ffffff;
+    --ink: #1e2430;
+    --ink-soft: #5b6472;
+    --rule: #ddd6c7;
+    --brass: #93672c;
+    --brass-strong: #7a5322;
+    --brass-wash: #f0e4cd;
+    --teal: #2f6b4f;
+    --teal-wash: #e3efe7;
+    --rust: #a34a24;
+    --rust-wash: #f6e6dc;
+    --mono-chip-bg: #eee9dc;
+    --mono-chip-ink: #4a4335;
+    --shadow: 0 1px 2px rgba(30,36,48,0.06), 0 8px 24px rgba(30,36,48,0.06);
+  }
+
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --paper: #14171d;
+      --paper-raised: #1c212a;
+      --ink: #ece8de;
+      --ink-soft: #a1a7b3;
+      --rule: #333a46;
+      --brass: #cf9f54;
+      --brass-strong: #e2b46e;
+      --brass-wash: #2c2418;
+      --teal: #7cc9a3;
+      --teal-wash: #16261e;
+      --rust: #e2895d;
+      --rust-wash: #2c1c14;
+      --mono-chip-bg: #262b34;
+      --mono-chip-ink: #cfd3da;
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #14171d;
+    --paper-raised: #1c212a;
+    --ink: #ece8de;
+    --ink-soft: #a1a7b3;
+    --rule: #333a46;
+    --brass: #cf9f54;
+    --brass-strong: #e2b46e;
+    --brass-wash: #2c2418;
+    --teal: #7cc9a3;
+    --teal-wash: #16261e;
+    --rust: #e2895d;
+    --rust-wash: #2c1c14;
+    --mono-chip-bg: #262b34;
+    --mono-chip-ink: #cfd3da;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    padding-inline: 20px;
+    padding-block: 48px 96px;
+  }
+
+  h1, h2, h3 { font-family: "Fraunces", Georgia, serif; text-wrap: balance; margin: 0; }
+
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--brass-strong);
+    background: var(--brass-wash);
+    border-radius: 999px;
+    padding: 5px 12px 5px 10px;
+    margin-bottom: 22px;
+  }
+  .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--brass); }
+
+  header h1 {
+    font-size: clamp(30px, 5vw, 42px);
+    font-weight: 600;
+    line-height: 1.08;
+    letter-spacing: -0.01em;
+  }
+
+  header .sub {
+    margin-top: 14px;
+    font-size: 17px;
+    color: var(--ink-soft);
+    max-width: 56ch;
+  }
+
+  .panel {
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    padding: 22px 24px;
+    margin-top: 28px;
+  }
+
+  .panel h2 {
+    font-size: 15px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--brass-strong);
+    margin-bottom: 10px;
+  }
+
+  .send-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 14px;
+  }
+  .send-col h3 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 8px;
+  }
+  .send-col.yes h3 { color: var(--teal); }
+  .send-col.no h3 { color: var(--rust); }
+  .send-col ul { margin: 0; padding-left: 20px; }
+  .send-col li { margin-bottom: 6px; font-size: 14.5px; }
+  @media (max-width: 520px) {
+    .send-grid { grid-template-columns: 1fr; }
+  }
+
+  .steps {
+    margin-top: 40px;
+    position: relative;
+  }
+
+  .steps::before {
+    content: "";
+    position: absolute;
+    left: 21px;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    background: var(--rule);
+  }
+
+  .step {
+    position: relative;
+    padding-left: 60px;
+    margin-bottom: 34px;
+  }
+  .step:last-child { margin-bottom: 0; }
+
+  .step-badge {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--paper-raised);
+    border: 2px solid var(--brass);
+    color: var(--brass-strong);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-weight: 600;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow);
+  }
+
+  .step h3 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .crumb {
+    display: inline-flex;
+    align-items: center;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12.5px;
+    color: var(--mono-chip-ink);
+    background: var(--mono-chip-bg);
+    border-radius: 6px;
+    padding: 4px 9px;
+    margin-bottom: 12px;
+  }
+
+  .step p { margin: 10px 0 0; }
+  .step ul, .step ol { margin: 10px 0 0; padding-left: 22px; }
+  .step li { margin-bottom: 6px; }
+
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.92em;
+    background: var(--mono-chip-bg);
+    color: var(--mono-chip-ink);
+    padding: 0.1em 0.4em;
+    border-radius: 4px;
+  }
+
+  pre {
+    background: var(--mono-chip-bg);
+    color: var(--mono-chip-ink);
+    padding: 12px 14px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 13px;
+    margin-top: 10px;
+  }
+  pre code { background: none; padding: 0; }
+
+  .callout {
+    margin-top: 14px;
+    border-radius: 10px;
+    padding: 13px 16px;
+    font-size: 14.5px;
+    display: flex;
+    gap: 10px;
+  }
+  .callout .icon { flex: none; font-size: 15px; line-height: 1.5; }
+  .callout.gotcha { background: var(--rust-wash); color: var(--rust); }
+  .callout.gotcha strong { color: var(--rust); }
+  .callout.note { background: var(--mono-chip-bg); color: var(--ink-soft); }
+  .callout.done { background: var(--teal-wash); color: var(--teal); }
+  .callout p, .callout span { margin: 0; }
+  .callout b { color: inherit; }
+
+  .links {
+    margin-top: 40px;
+  }
+  .links h2 {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .links .sub { color: var(--ink-soft); margin-bottom: 20px; font-size: 14.5px; }
+
+  .linkcard {
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow);
+  }
+  .linkcard .t {
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .linkcard .d { margin-top: 6px; font-size: 14.5px; color: var(--ink-soft); }
+  .linkcard .f { margin-top: 8px; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; color: var(--brass-strong); }
+
+  footer {
+    margin-top: 48px;
+    padding-top: 22px;
+    border-top: 1px solid var(--rule);
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow"><span class="dot"></span>Nothing of yours ever leaves your PC</div>
+    <h1>Sharing Personal Vault with a friend</h1>
+    <p class="sub">
+      You send them the app. Everything else — their master secret, their Google Drive
+      connection, their one-time-link setup if they want it — is entirely self-service on
+      their end, with their own accounts. Your <code>credentials.json</code>, your vault,
+      and your master secret never leave this PC.
+    </p>
+  </header>
+
+  <div class="panel">
+    <h2>What to send / what to keep private</h2>
+    <div class="send-grid">
+      <div class="send-col yes">
+        <h3>✓ Send this</h3>
+        <ul>
+          <li>The zipped <code>publish\</code> folder (the app itself)</li>
+        </ul>
+      </div>
+      <div class="send-col no">
+        <h3>✕ Keep this private</h3>
+        <ul>
+          <li>Your <code>credentials.json</code></li>
+          <li>Your <code>vault.pvlt</code> / data folder</li>
+          <li>Your master secret</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="steps">
+
+    <div class="step">
+      <div class="step-badge">1</div>
+      <span class="crumb">Command prompt → PersonalVault project folder</span>
+      <h3>Build a portable copy</h3>
+      <pre><code>dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish</code></pre>
+      <p>
+        Produces a <code>publish\</code> folder with <code>PersonalVault.exe</code> and
+        everything it needs bundled in (roughly 100-150 MB — that's the .NET runtime,
+        which is why your friend needs no separate install).
+      </p>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">2</div>
+      <span class="crumb">Zip &amp; send</span>
+      <h3>Zip the publish folder and send it</h3>
+      <p>
+        Email, USB drive, shared folder — however you'd send any file. Double-check the
+        zip only contains the <code>publish\</code> folder, not your own <code>%AppData%</code>
+        or data folder.
+      </p>
+      <div class="callout gotcha">
+        <span class="icon">⚠️</span>
+        <span><b>Do not include <code>credentials.json</code></b> in this zip. That file lets
+        whoever has it sign in to Drive as the app — each person should create their own,
+        entirely free, in about ten minutes (Step 4 below covers it, fully self-service).</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">3</div>
+      <span class="crumb">Their PC</span>
+      <h3>They run it and create their own vault</h3>
+      <ol>
+        <li>Unzip the folder anywhere — no install, no admin rights needed.</li>
+        <li>Double-click <code>PersonalVault.exe</code>.</li>
+        <li>Choose a master secret: minimum 12 characters, with uppercase, lowercase, and
+          a symbol. There's no password reset — losing it means losing the vault.</li>
+        <li>Add their first account.</li>
+      </ol>
+      <div class="callout done">
+        <span class="icon">✓</span>
+        <span>Their data lives in a <code>PersonalVault</code> folder created automatically
+        right next to their copy of <code>PersonalVault.exe</code> — fully portable, and
+        completely separate from yours even though it came from the same zip.</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">4</div>
+      <span class="crumb">Optional</span>
+      <h3>Google Drive backup — entirely self-service</h3>
+      <p>
+        Skip this if neither of you wants cloud backup — the app works fully offline. If
+        they want it, they follow <code>PersonalVault-Drive-Setup-Guide.html</code> (in
+        this same folder) start to finish: their own Google Cloud project, their own
+        <code>credentials.json</code>, their own separate Drive file. Nothing from you is
+        needed at any point.
+      </p>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">5</div>
+      <span class="crumb">Optional</span>
+      <h3>One-time Share links — also entirely self-service</h3>
+      <p>
+        Unrelated to Drive backup — this is the <b>Share...</b> button that hands someone
+        a real one-time link to a single password. Skip it and everything else still
+        works normally. If they want it, they follow
+        <code>PersonalVault-Share-Setup-Guide.html</code> (also in this folder): their own
+        GitHub Pages site and their own Google Apps Script deployment.
+      </p>
+    </div>
+
+  </div>
+
+  <div class="links">
+    <h2>The two guides this points to</h2>
+    <div class="sub">Both live in this same Instructions folder — hand your friend the whole folder if they might want either feature.</div>
+
+    <div class="linkcard">
+      <div class="t">Google Drive backup setup</div>
+      <div class="d">Self-service: own Google Cloud project, own credentials.json, own Drive file. ~10 minutes.</div>
+      <div class="f">PersonalVault-Drive-Setup-Guide.html</div>
+    </div>
+
+    <div class="linkcard">
+      <div class="t">One-time Share link setup</div>
+      <div class="d">Self-service: own GitHub Pages site, own Google Apps Script Web App. ~15 minutes.</div>
+      <div class="f">PersonalVault-Share-Setup-Guide.html</div>
+    </div>
+  </div>
+
+  <footer>
+    <span>Personal Vault — sharing with a friend</span>
+    <span>Everything past step 3 is optional and self-service</span>
+  </footer>
+
+</div>
