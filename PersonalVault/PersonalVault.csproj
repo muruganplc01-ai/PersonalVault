@@ -20,6 +20,11 @@
     <Authors>You</Authors>
     <Product>Personal Vault</Product>
     <ApplicationIcon>Resources\AppIcon.ico</ApplicationIcon>
+
+    <!-- Build output goes straight to C:\Personal instead of the default bin\Debug\<TFM>\ -->
+    <OutputPath>C:\Personal\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>
 
   <ItemGroup>

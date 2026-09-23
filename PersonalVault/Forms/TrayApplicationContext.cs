@@ -176,7 +176,7 @@ public class TrayApplicationContext : ApplicationContext
         if (!EnsureUnlocked()) return;
         if (_vault == null) return;
 
-        using var form = new ProfileForm(_vault.Profile, _settings.DefaultBrowserPath, _settings.GitHubUsername, ChangeSecret);
+        using var form = new ProfileForm(_vault.Profile, _settings.DefaultBrowserPath, _settings.GitHubUsername, ChangeSecret, AppPaths.RootFolder, ChangeDataFolder);
         if (form.ShowDialog() == DialogResult.OK)
         {
             SetDefaultBrowserPath(form.SelectedBrowserPath);
@@ -689,6 +689,8 @@ public class TrayApplicationContext : ApplicationContext
                 () => _settings.GitHubUsername,
                 SetGitHubUsername,
                 ChangeSecret,
+                () => AppPaths.RootFolder,
+                ChangeDataFolder,
                 ShareAccountAsync);
             _mainForm.FormClosing += (_, e) =>
             {
@@ -1143,6 +1145,15 @@ public class TrayApplicationContext : ApplicationContext
         SaveVault(); // Re-encrypts the whole vault file under the new secret (new salt/nonce too) and re-uploads it.
         MessageBox.Show("Master secret updated. The vault file has been re-encrypted.", "Personal Vault");
     }
+
+    /// <summary>
+    /// Called from ProfileForm's "Change Data Folder..." (the confirmation prompt
+    /// already happened there). DataFolderMover.MoveTo does the actual copy and
+    /// repoints AppPaths/registers the choice for next launch - nothing here needs to
+    /// touch _vault/_secret/_settings, since every future save already reads its target
+    /// path from AppPaths fresh each time rather than caching it.
+    /// </summary>
+    private void ChangeDataFolder(string newFolder) => DataFolderMover.MoveTo(newFolder);
 
     private void ExitApplication()
     {

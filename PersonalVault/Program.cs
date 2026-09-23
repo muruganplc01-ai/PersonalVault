@@ -1,6 +1,8 @@
 using System.Threading;
 using System.Windows.Forms;
 using PersonalVault.Forms;
+using PersonalVault.Storage;
+using PersonalVault.Utils;
 
 namespace PersonalVault;
 
@@ -24,6 +26,12 @@ internal static class Program
                 MessageBoxIcon.Information);
             return;
         }
+
+        // Must happen before anything else touches AppPaths (including
+        // TrayApplicationContext's constructor) - applies a data folder chosen earlier
+        // via Profile -> "Change Data Folder...", if any. See DataFolderLocation/
+        // DataFolderMover for how that choice is made and remembered.
+        AppPaths.ApplyOverride(DataFolderLocation.GetOverride());
 
         ApplicationConfiguration.Initialize();
         Application.Run(new TrayApplicationContext());

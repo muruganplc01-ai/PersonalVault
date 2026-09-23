@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Windows.Forms;
+using PersonalVault.Security;
 
 namespace PersonalVault.Forms;
 
@@ -37,7 +38,7 @@ public class UnlockForm : Form
             _ => "Unlock Personal Vault"
         };
         Width = 420;
-        Height = mode == UnlockMode.CreateNew ? 300 : 220;
+        Height = mode == UnlockMode.CreateNew ? 350 : 220;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterScreen;
         MaximizeBox = false;
@@ -47,13 +48,14 @@ public class UnlockForm : Form
         {
             AutoSize = false,
             Width = 380,
-            Height = 50,
+            Height = mode == UnlockMode.CreateNew ? 110 : 50,
             Location = new Point(15, 12),
             Text = mode switch
             {
                 UnlockMode.CreateNew =>
                     "Choose a master secret. It encrypts everything in this vault and is never " +
-                    "stored anywhere. If you lose it, your data cannot be recovered.",
+                    "stored anywhere. If you lose it, your data cannot be recovered.\n\n" +
+                    "Requirements: " + PasswordPolicy.RequirementsText + ".",
                 UnlockMode.RestoreFromBackup =>
                     "Enter the master secret this backup was created with (the same one you used " +
                     "on the original PC).",
@@ -95,7 +97,15 @@ public class UnlockForm : Form
     {
         _errorLabel.Text = "";
 
-        if (string.IsNullOrWhiteSpace(_secretBox.Text) || _secretBox.Text.Length < 8)
+        if (Mode == UnlockMode.CreateNew)
+        {
+            if (!PasswordPolicy.IsValid(_secretBox.Text))
+            {
+                _errorLabel.Text = "Secret must have " + PasswordPolicy.RequirementsText + ".";
+                return;
+            }
+        }
+        else if (string.IsNullOrWhiteSpace(_secretBox.Text) || _secretBox.Text.Length < 8)
         {
             _errorLabel.Text = "Secret must be at least 8 characters.";
             return;

@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Windows.Forms;
+using PersonalVault.Security;
 
 namespace PersonalVault.Forms;
 
@@ -23,7 +24,7 @@ public class ChangeSecretForm : Form
     {
         Text = "Change Master Secret";
         Width = 420;
-        Height = 300;
+        Height = 340;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MaximizeBox = false;
@@ -33,9 +34,10 @@ public class ChangeSecretForm : Form
         {
             AutoSize = false,
             Width = 380,
-            Height = 40,
+            Height = 70,
             Location = new Point(15, 12),
-            Text = "This re-encrypts the entire vault file (and re-uploads it to Google Drive if connected)."
+            Text = "This re-encrypts the entire vault file (and re-uploads it to Google Drive if connected).\n\n" +
+                   "New secret requirements: " + PasswordPolicy.RequirementsText + "."
         };
         Controls.Add(note);
 
@@ -86,9 +88,9 @@ public class ChangeSecretForm : Form
             return;
         }
 
-        if (_newBox.Text.Length < 8)
+        if (!PasswordPolicy.IsValid(_newBox.Text))
         {
-            _errorLabel.Text = "New secret must be at least 8 characters.";
+            _errorLabel.Text = "New secret must have " + PasswordPolicy.RequirementsText + ".";
             return;
         }
 

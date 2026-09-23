@@ -17,7 +17,12 @@ This is a working v2 - see "What's next" below for what's still just an idea.
   recovered; there's no backdoor by design.
 - **Storage**: everything (account type, institution, username, password, account
   number, due date, notes, arbitrary extra fields, ...) lives as one JSON blob inside
-  that encrypted file: `%AppData%\PersonalVault\vault.pvlt`.
+  that encrypted file. By default it's a `PersonalVault` folder right next to the
+  running `.exe` (a portable, no-installer layout) - `vault.pvlt` inside it. Move it
+  anywhere via Profile -> **Change Data Folder...**, which copies everything over and
+  remembers the choice (in the registry, not inside the folder itself, since the app
+  needs to know where to look before it knows where the folder is) so it's picked up
+  again on the next launch - see "Data folder location" below.
 - **Sync**: the encrypted file (never the plaintext) is uploaded to Google Drive via
   the Drive API, using the narrow `drive.file` scope - the app can only see files it
   created, not your whole Drive. Sync uses simple last-write-wins: on startup, and
@@ -40,8 +45,8 @@ This is a working v2 - see "What's next" below for what's still just an idea.
   can also lock it immediately yourself via tray menu → "Lock Now". Change the timeout
   (or disable it) from tray menu → **Settings...**.
 - **Settings UI**: tray menu → "Settings..." edits auto-lock minutes, the due-date
-  reminder windows, and "Start with Windows" - no more hand-editing
-  `%AppData%\PersonalVault\settings.json`.
+  reminder windows, and "Start with Windows" - no more hand-editing `settings.json`
+  yourself.
 - **Profile**: tray menu → "Profile..." (or the "Profile..." button in the account
   list window) sets your display name and an optional picture. Both are stored only
   inside the encrypted vault file itself - the picture is never uploaded anywhere
@@ -99,7 +104,7 @@ PersonalVault/
   Security/VaultCrypto.cs    AES-256-GCM encrypt/decrypt + PBKDF2 key derivation
   Storage/VaultStorage.cs    JSON <-> encrypted bytes <-> vault.pvlt on disk
   Storage/GoogleDriveSync.cs Google Drive OAuth + upload/download + rolling revision backups
-  Storage/AppPaths.cs        All file/folder locations (under %AppData%\PersonalVault)
+  Storage/AppPaths.cs        All file/folder locations (default: a PersonalVault folder next to the .exe; overridable, see Utils/DataFolderMover.cs)
   Storage/AppSettings.cs     Small non-secret settings (reminder days, cached Drive file id, auto-lock timeout)
   Services/DueDateNotifier.cs   Due-date scanning + notifications
   Services/ToastNotifier.cs     Rich toast notifications, with fallback to tray balloons
@@ -119,7 +124,9 @@ PersonalVault/
   Storage/SharesStorage.cs   Load/save shares.json (the SharedLink list)
   Services/ShareExpiryService.cs Background sweep that revokes expired share links
   Utils/StartupManager.cs     "Start with Windows" via the per-user Run registry key
-  Utils/CredentialBootstrap.cs   Auto-copies a bundled credentials.json into %AppData% on first run
+  Utils/CredentialBootstrap.cs   Auto-copies a bundled credentials.json into the data folder on first run
+  Utils/DataFolderLocation.cs Remembers a custom data folder choice in the registry (read before AppPaths knows where to look)
+  Utils/DataFolderMover.cs    Profile's "Change Data Folder..." - copies everything to a new location
   Utils/SystemIdleTime.cs     Reads system-wide idle time (Win32 GetLastInputInfo) for auto-lock
   Utils/CsvIO.cs              CSV export/import for accounts
   Resources/AppIcon.ico       App/tray icon (embedded into the .exe via <ApplicationIcon>)
@@ -151,6 +158,25 @@ dotnet add PersonalVault/PersonalVault.csproj package Google.Apis.Drive.v3
 to pick up whatever the current version is - the code only uses long-stable APIs from
 that package.
 
+## Data folder location
+
+By default, Personal Vault keeps everything (`vault.pvlt`, `payments.pvlt`,
+`settings.json`, `credentials.json`, the Drive sign-in token cache, `shares.json`) in a
+`PersonalVault` folder created right next to `PersonalVault.exe` - a portable,
+no-installer layout: copy the whole containing folder somewhere else (another drive, a
+USB stick) and your data goes with it, no hunting through `%AppData%` required.
+
+To use a different folder instead - a synced folder, a different drive, wherever you'd
+rather keep it - open **Profile...** and use **Change Data Folder...** under "Data
+folder": pick a folder, confirm, and everything is copied there immediately (the old
+folder is left untouched as a backup - nothing is deleted). The choice is remembered in
+the registry (`HKCU\Software\PersonalVault`, not inside the data folder itself, since
+the app has to know where to look before it knows where the folder is) so it's picked
+up again automatically on every future launch, including after moving the .exe itself.
+
+If you skip this entirely, the default (next to the .exe) is created automatically the
+first time the app runs and needs it - there's nothing to set up ahead of time.
+
 ## One-time setup: Google Drive
 
 The app needs an OAuth **client** (not a service account) so it can ask *you* to grant
@@ -164,14 +190,15 @@ it access, the first time you click "Sign in to Google Drive" from the tray menu
    it's in "Testing" mode, add your own Google account under "Test users".
 4. **APIs & Services → Credentials → Create Credentials → OAuth client ID** → choose
    application type **Desktop app**.
-5. Download the resulting JSON, rename it to `credentials.json`, and place it at:
-   `%AppData%\PersonalVault\credentials.json`
-   (create the `PersonalVault` folder if it doesn't exist yet; you can also just run
-   the app once first so it creates the folder for you).
+5. Download the resulting JSON, rename it to `credentials.json`, and place it inside
+   the app's data folder - by default a `PersonalVault` folder right next to
+   `PersonalVault.exe` (run the app once first so it creates the folder for you; check
+   Profile → **Data folder** if you're not sure where that is, e.g. after using
+   **Change Data Folder...**).
 6. Run the app, unlock/create your vault, then use the tray menu → **Sign in to
    Google Drive**. A browser window opens for you to grant access once; after that,
-   the app stays signed in (a refresh token is cached locally under
-   `%AppData%\PersonalVault\drive-token\`).
+   the app stays signed in (a refresh token is cached locally in that same data
+   folder's `drive-token\` subfolder).
 
 If you'd rather not deal with Google Cloud Console at all yet, you can skip this
 entirely - the app works fully offline against the local encrypted file, and you can
@@ -204,8 +231,9 @@ running the same app. Setup for this:
    however you'd share any file). They unzip it anywhere and double-click
    `PersonalVault.exe` - no install, no admin rights needed.
 5. On first launch, the app automatically copies the bundled `credentials.json` into
-   their own `%AppData%\PersonalVault\` the moment it sees one sitting next to the
-   .exe - they never have to find that folder or copy anything by hand. After they
+   their own `PersonalVault` data folder (created right next to their copy of the
+   .exe) the moment it sees one sitting next to it - they never have to find that
+   folder or copy anything by hand. After they
    create their master secret, it directly asks "Connect Google Drive now?" - clicking
    Yes pops the same one-time Google sign-in browser window you saw, just for their own
    account.
@@ -293,9 +321,12 @@ set it from Profile first instead of failing silently.
    already present, it first asks whether to sign in to Google Drive and check for an
    **existing backup** before creating anything new - see "Disaster recovery" below.
    Assuming there isn't one (the normal case for a truly first run), it then creates
-   `%AppData%\PersonalVault\` and asks you to choose a master secret (minimum 8
-   characters - use something long and memorable; this is the only thing standing
-   between anyone and every password you store).
+   its data folder (a `PersonalVault` folder next to the .exe by default - see "Data
+   folder location" below) and asks you to choose a master secret (minimum 12
+   characters, with a mix of uppercase, lowercase, and at least one symbol - use
+   something long and memorable; this is the only thing standing between anyone and
+   every password you store). Changing it later (tray menu or Profile ->
+   **Change Master Password...**) enforces the same requirement.
 2. If a `credentials.json` is present but you weren't signed in yet, the app asks
    right away whether to connect Google Drive - one click, one browser sign-in, done.
 3. It opens the (initially empty) account list. Click **Add Account** to add your
@@ -364,6 +395,11 @@ if you genuinely want a fresh start.
 - Share Account links are expiring, not a true one-time view, and need the app running
   for expired ones to actually get cleaned up on Drive - see "Sharing an account
   (one-time link)" above for the full explanation and setup.
+- The default data folder is now next to the `.exe` rather than a fixed `%AppData%`
+  location - moving/copying just the `.exe` without its sibling `PersonalVault` data
+  folder leaves the data behind. Use Profile -> **Change Data Folder...** first if you
+  need to relocate deliberately (it copies everything and remembers the new location in
+  the registry either way), rather than moving the `.exe` and folder separately by hand.
 - Auto-lock (10 min idle by default, see "How it works" above) covers walking away from
   an unlocked PC, but the secret is still a plain in-memory `string` while unlocked -
   .NET strings are immutable and the GC doesn't scrub freed memory, so this isn't

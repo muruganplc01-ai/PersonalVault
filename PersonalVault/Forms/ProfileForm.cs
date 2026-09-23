@@ -16,7 +16,10 @@ namespace PersonalVault.Forms;
 /// back out via SelectedBrowserPath/GitHubUsername for the caller to persist instead,
 /// since this form has no direct access to AppSettings. "Change Master Password..." is
 /// a shortcut to the same ChangeSecretForm flow as the tray menu's "Change Master
-/// Secret..." - see the changeMasterSecret constructor parameter.
+/// Secret..." - see the changeMasterSecret constructor parameter. "Change Data
+/// Folder..." works the same way for Utils/DataFolderMover.MoveTo, letting the whole
+/// %-app-folder%\PersonalVault\ (or wherever it's already been moved to) be relocated
+/// without leaving this window.
 ///
 /// The picture never leaves this app except inside the encrypted vault file itself -
 /// there is deliberately no separate upload of it anywhere.
@@ -41,6 +44,7 @@ public class ProfileForm : Form
     private readonly TextBox _nameBox = new() { Location = new Point(20, 182), Width = 340 };
     private readonly TextBox _browserPathBox = new() { Location = new Point(20, 268), Width = 250, ReadOnly = true };
     private readonly TextBox _gitHubUsernameBox = new() { Location = new Point(20, 350), Width = 250 };
+    private readonly TextBox _dataFolderBox = new() { Location = new Point(20, 566), Width = 250, ReadOnly = true };
 
     /// <summary>
     /// The chosen default-browser .exe path, or null to mean "use Windows' normal
@@ -55,22 +59,31 @@ public class ProfileForm : Form
     public string? GitHubUsername { get; private set; }
 
     private readonly Action? _changeMasterSecret;
+    private readonly Action<string>? _changeDataFolder;
 
     /// <summary>
     /// changeMasterSecret is TrayApplicationContext.ChangeSecret, passed in so the
     /// button below can trigger the existing verify-old-secret / re-encrypt-the-vault
     /// flow (ChangeSecretForm) without this form needing to know anything about secrets
     /// or encryption itself - null (its default) hides the button entirely, for any
-    /// future caller that doesn't have that capability wired up.
+    /// future caller that doesn't have that capability wired up. currentDataFolder/
+    /// changeDataFolder work the same way for Utils/DataFolderMover.MoveTo.
     /// </summary>
-    public ProfileForm(VaultProfile profile, string? currentDefaultBrowserPath = null, string? currentGitHubUsername = null, Action? changeMasterSecret = null)
+    public ProfileForm(
+        VaultProfile profile,
+        string? currentDefaultBrowserPath = null,
+        string? currentGitHubUsername = null,
+        Action? changeMasterSecret = null,
+        string? currentDataFolder = null,
+        Action<string>? changeDataFolder = null)
     {
         _profile = profile;
         _changeMasterSecret = changeMasterSecret;
+        _changeDataFolder = changeDataFolder;
 
         Text = "Your Profile";
         Width = 400;
-        Height = 640;
+        Height = 780;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MaximizeBox = false;
@@ -143,8 +156,34 @@ public class ProfileForm : Form
         Controls.Add(changeSecretButton);
         Controls.Add(changeSecretNote);
 
-        var cancelButton = new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel, Location = new Point(230, 545) };
-        var saveButton = new Button { Text = "Save", AutoSize = true, Location = new Point(315, 545) };
+        Controls.Add(new Label { Text = "Data folder:", AutoSize = true, Location = new Point(20, 546) });
+        var openFolderBtn = new Button { Text = "Open Folder", AutoSize = true, Location = new Point(280, 565) };
+        openFolderBtn.Click += (_, _) => OpenDataFolder();
+        Controls.Add(_dataFolderBox);
+        Controls.Add(openFolderBtn);
+
+        var changeFolderBtn = new Button
+        {
+            Text = "Change Data Folder...",
+            AutoSize = true,
+            Location = new Point(20, 596),
+            Visible = _changeDataFolder != null
+        };
+        changeFolderBtn.Click += (_, _) => ChangeDataFolder();
+        Controls.Add(changeFolderBtn);
+        Controls.Add(new Label
+        {
+            Text = "Copies everything (vault, settings, Google Drive sign-in) to the new folder. " +
+                   "The current folder is left in place as a backup - nothing is deleted.",
+            AutoSize = false,
+            Location = new Point(20, 626),
+            Width = 350,
+            Height = 40,
+            ForeColor = Color.DimGray
+        });
+
+        var cancelButton = new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel, Location = new Point(230, 685) };
+        var saveButton = new Button { Text = "Save", AutoSize = true, Location = new Point(315, 685) };
         saveButton.Click += SaveButton_Click;
         Controls.Add(cancelButton);
         Controls.Add(saveButton);
@@ -155,6 +194,7 @@ public class ProfileForm : Form
         _nameBox.Text = _profile.Name;
         _browserPathBox.Text = currentDefaultBrowserPath ?? string.Empty;
         _gitHubUsernameBox.Text = currentGitHubUsername ?? string.Empty;
+        _dataFolderBox.Text = currentDataFolder ?? string.Empty;
         if (_profile.HasPicture)
         {
             try
@@ -225,6 +265,58 @@ public class ProfileForm : Form
         GitHubUsername = string.IsNullOrEmpty(gitHubUsername) ? null : gitHubUsername;
 
         DialogResult = DialogResult.OK;
+    }
+
+    private void OpenDataFolder()
+    {
+        if (string.IsNullOrEmpty(_dataFolderBox.Text)) return;
+        try
+        {
+            System.Diagnostics.Process.Start("explorer.exe", _dataFolderBox.Text);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, "Could not open that folder: " + ex.Message, "Personal Vault",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Lets the user pick a new folder, confirms, then delegates the actual copy to
+    /// _changeDataFolder (TrayApplicationContext.ChangeDataFolder -> DataFolderMover) -
+    /// this form just drives the picker/confirmation UI and reflects the result back
+    /// into _dataFolderBox, since AppPaths takes effect immediately with no restart.
+    /// </summary>
+    private void ChangeDataFolder()
+    {
+        if (_changeDataFolder == null) return;
+
+        using var dialog = new FolderBrowserDialog
+        {
+            Description = "Choose a folder for Personal Vault's data (vault, settings, Drive sign-in).",
+            UseDescriptionForTitle = true,
+            SelectedPath = _dataFolderBox.Text
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        var confirm = MessageBox.Show(this,
+            $"Copy everything from:\n{_dataFolderBox.Text}\n\nto:\n{dialog.SelectedPath}\n\n" +
+            "The current folder is left in place - nothing is deleted. Continue?",
+            "Personal Vault", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+        if (confirm != DialogResult.Yes) return;
+
+        try
+        {
+            _changeDataFolder(dialog.SelectedPath);
+            _dataFolderBox.Text = dialog.SelectedPath;
+            MessageBox.Show(this, "Data folder changed. Personal Vault will use the new location from now on.",
+                "Personal Vault", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, "Could not change the data folder: " + ex.Message, "Personal Vault",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     /// <summary>Loads an image file and crops/scales it to fill a size x size square - a standard avatar treatment.</summary>
