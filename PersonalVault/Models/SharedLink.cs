@@ -18,17 +18,21 @@ public class SharedLink
     /// <summary>Snapshot of the account's name at share time, so the management list still means something if the account is later renamed or deleted.</summary>
     public string AccountName { get; set; } = string.Empty;
 
-    /// <summary>The Drive file holding the encrypted single-account payload.</summary>
+    /// <summary>The Drive file holding the encrypted single-account payload. Kept private - never "anyone with the link" - see GoogleDriveSync.UploadShareAsync.</summary>
     public string DriveFileId { get; set; } = string.Empty;
-
-    /// <summary>The "anyone with the link" permission id Drive returned when sharing DriveFileId - not currently needed to revoke (deleting the file removes it too), kept for reference.</summary>
-    public string? PermissionId { get; set; }
 
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
 
     /// <summary>Once this passes, ShareExpiryService deletes the Drive file on its next sweep and sets Revoked.</summary>
     public DateTime ExpiresUtc { get; set; }
 
-    /// <summary>True once the Drive file has been deleted, whether by expiry or a manual "Revoke Now".</summary>
+    /// <summary>
+    /// True once ShareExpiryService or a manual "Revoke Now" has deleted the Drive
+    /// file. NOTE: this does NOT necessarily mean nobody ever saw it - the Apps Script
+    /// Web App (docs/share/AppsScript/Code.gs) also deletes the file the instant it's
+    /// opened, but has no way to report that back to this app, so a link that was
+    /// already viewed still shows as "Active" here until its normal expiry passes and
+    /// the next sweep discovers the file is already gone.
+    /// </summary>
     public bool Revoked { get; set; }
 }

@@ -163,15 +163,18 @@
   "use strict";
 
   // ---------------------------------------------------------------------
-  // One-time setup: paste a Google Cloud API key here, restricted (in Cloud
-  // Console -> Credentials) to the Drive API and to this page's own HTTP
-  // referrer (e.g. "https://yourusername.github.io/*"). This key can only
-  // ever be used to fetch bytes of Drive files that are ALREADY shared
-  // "anyone with the link" - it cannot read private files, list a Drive, or
-  // write anything - so it being visible in this page's source is expected
-  // and safe as long as the referrer restriction is in place.
+  // One-time setup: deploy docs/share/AppsScript/Code.gs as a Google Apps Script
+  // Web App (Deploy -> New deployment -> Web app -> Execute as: Me -> Who has
+  // access: Anyone), then paste its "/exec" URL here. The script runs under the
+  // vault owner's own Google account regardless of who calls it, which is what
+  // makes a real one-time view possible: it deletes the Drive file the instant
+  // it's first successfully served, so a share link this page hands you either
+  // wasn't reachable at all directly (the Drive file is never public) or dies
+  // the moment anyone actually opens it - unlike a plain API key, nothing here
+  // is a secret worth restricting, since the script only ever does one useful
+  // thing for a stranger: serve one file, once, then destroy it.
   // ---------------------------------------------------------------------
-  var DRIVE_API_KEY = "AIzaSyDqx5ZxQmV0t0PpZCgA9Fi5uDfbqvPp_gc";
+  var APPS_SCRIPT_URL = "https://script.google.com/macros/s/YOUR-DEPLOYMENT-ID/exec";
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -182,13 +185,17 @@
     if (detail) $("errorDetail").textContent = detail;
   }
 
-  function base64UrlToBytes(b64url) {
-    var b64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
-    while (b64.length % 4 !== 0) b64 += "=";
+  function base64ToBytes(b64) {
     var binary = atob(b64);
     var bytes = new Uint8Array(binary.length);
     for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     return bytes;
+  }
+
+  function base64UrlToBytes(b64url) {
+    var b64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4 !== 0) b64 += "=";
+    return base64ToBytes(b64);
   }
 
   function bytesToUtf8(bytes) {
@@ -324,23 +331,35 @@
 
     var response;
     try {
-      var url = "https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(id) +
-        "?alt=media&key=" + encodeURIComponent(DRIVE_API_KEY);
+      var url = APPS_SCRIPT_URL + "?id=" + encodeURIComponent(id);
       response = await fetch(url);
     } catch (e) {
-      showError("Could not reach Google Drive. Check your internet connection and try again.");
+      showError("Could not reach the share service. Check your internet connection and try again.");
       return;
     }
 
     if (!response.ok) {
-      // 404 (deleted/expired/revoked) is the expected steady state once a
-      // share is gone - anything else is still shown as "gone" from the
-      // recipient's point of view, since there's nothing more useful to do.
       showError();
       return;
     }
 
-    var blobBytes = new Uint8Array(await response.arrayBuffer());
+    // The Apps Script endpoint has already deleted the Drive file by the time this
+    // response arrives (it consumes on read, inside a lock - see Code.gs) - "GONE"
+    // means either it never existed, already expired/was revoked, or someone else
+    // (possibly this same browser, on a reload) already opened this exact link once.
+    var bodyText = (await response.text()).trim();
+    if (bodyText === "GONE") {
+      showError();
+      return;
+    }
+
+    var blobBytes;
+    try {
+      blobBytes = base64ToBytes(bodyText);
+    } catch (e) {
+      showError("This link's data could not be read.");
+      return;
+    }
 
     var parsed;
     try {

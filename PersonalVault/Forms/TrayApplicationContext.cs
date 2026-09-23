@@ -197,12 +197,15 @@ public class TrayApplicationContext : ApplicationContext
     }
 
     /// <summary>
-    /// Encrypts a single account under a fresh random key, uploads it to Drive with
-    /// "anyone with the link" read access, records a SharedLink for the background
+    /// Encrypts a single account under a fresh random key, uploads it to Drive as a
+    /// completely private file (never "anyone with the link" - only the owner's Apps
+    /// Script Web App can ever read it, and only once, see
+    /// GoogleDriveSync.UploadShareAsync), records a SharedLink for the background
     /// expiry sweep / "Shared Links..." management list, and returns the full share URL
-    /// (ShareConfig.ViewerBaseUrl plus the Drive file id and key in the URL fragment, so
-    /// the key itself never reaches any server - see docs/share/index.html). Called from
-    /// MainForm's Share... button via ShareAccountForm.
+    /// (built from AppSettings.GitHubUsername plus the Drive file id and key in the URL
+    /// fragment, so the key itself never reaches any server - see
+    /// docs/share/index.html). Called from MainForm's Share... button via
+    /// ShareAccountForm.
     /// </summary>
     private async Task<string> ShareAccountAsync(AccountEntry account, TimeSpan lifetime)
     {
@@ -231,12 +234,11 @@ public class TrayApplicationContext : ApplicationContext
         byte[] plaintext = JsonSerializer.SerializeToUtf8Bytes(payload);
         byte[] key;
         string driveFileId;
-        string? permissionId;
         try
         {
             var (blob, rawKey) = ShareCrypto.Encrypt(plaintext);
             key = rawKey;
-            (driveFileId, permissionId) = await _drive.UploadShareAsync(blob, $"{GoogleDriveSync.ShareFilePrefix}{Guid.NewGuid()}.bin");
+            driveFileId = await _drive.UploadShareAsync(blob, $"{GoogleDriveSync.ShareFilePrefix}{Guid.NewGuid()}.bin");
         }
         finally
         {
@@ -248,7 +250,6 @@ public class TrayApplicationContext : ApplicationContext
             AccountEntryId = account.Id,
             AccountName = account.Name,
             DriveFileId = driveFileId,
-            PermissionId = permissionId,
             CreatedUtc = DateTime.UtcNow,
             ExpiresUtc = expiresUtc
         });

@@ -76,14 +76,15 @@ This is a working v2 - see "What's next" below for what's still just an idea.
   history - so an accidental delete, a bad edit, or a botched sync has a recent copy to
   recover from (via Drive's web UI → right-click the file → "Manage versions"). This is
   best-effort and never blocks or fails a sync.
-- **Share an account (one-time link)**: click **Share...** in the account list window
-  to send one account to someone who doesn't use Personal Vault at all - no app, no
-  account, no sign-in on their end. Pick how long the link stays live (1 hour to 7
-  days), and the app encrypts just that one account under a brand-new random key,
-  uploads it to your own Google Drive as a link-readable file, and gives you a URL to
-  send however you like. See "Sharing an account (one-time link)" below for the
-  one-time setup this needs and its honest limitations (it's expiring, not a true
-  atomic single view).
+- **Share an account (real one-time link)**: click **Share...** in the account list
+  window to send one account to someone who doesn't use Personal Vault at all - no app,
+  no account, no sign-in on their end. Pick how long the link stays live if nobody
+  opens it (1 hour to 7 days), and the app encrypts just that one account under a
+  brand-new random key and uploads it to your own Google Drive as a completely private
+  file. The link itself is only ever readable through a small Google Apps Script Web
+  App you deploy once (see "Sharing an account (one-time link)" below) - it deletes the
+  Drive file the instant it's first opened, so this is a real one-time view (first
+  device wins, dead everywhere after), not just an expiring link.
 - **Rich notifications**: due-date alerts, lock notices, and sync status use real
   Windows action-center toasts (via `Microsoft.Toolkit.Uwp.Notifications`) with an
   "Open Vault" button, when Windows will let this unpackaged app register for them.
@@ -131,6 +132,7 @@ PersonalVault/
   Utils/CsvIO.cs              CSV export/import for accounts
   Resources/AppIcon.ico       App/tray icon (embedded into the .exe via <ApplicationIcon>)
 docs/share/index.html          Static page (host via GitHub Pages) that decrypts/shows a shared account
+docs/share/AppsScript/Code.gs   Deploy as a Web App - serves+deletes a share's Drive file exactly once
 ```
 
 ## Building
@@ -249,11 +251,20 @@ of a portable folder, that's possible with a tool like
 
 Personal Vault has no server of its own, so a "share this one account" link needs
 somewhere to live: it works by encrypting a single account under a fresh random key
-(never your master secret), hosting the ciphertext as a Drive file that's readable by
-anyone with the link, and pointing the link at a small static page that decrypts it in
-the recipient's own browser. The decryption key travels only in the URL's `#fragment`,
-which browsers never send to any server - so neither Google, nor GitHub Pages, nor
-anyone but the recipient ever sees it.
+(never your master secret), uploading the ciphertext as a **completely private** Drive
+file, and pointing the link at a small static page that decrypts it in the recipient's
+own browser. The decryption key travels only in the URL's `#fragment`, which browsers
+never send to any server - so neither Google, nor GitHub Pages, nor anyone but the
+recipient ever sees it.
+
+Reading a private Drive file on someone else's behalf, and deleting it the instant
+that happens, needs *something* running with the vault owner's own authority - that's
+what the small Google Apps Script Web App (`docs/share/AppsScript/Code.gs`) is for. It
+runs "as you" no matter who calls it, is free, and lives in the same Google account
+already used for Drive sync - no separate hosting or billing. This is what makes the
+link a **real one-time view**: the first successful open deletes the Drive file, so
+it's dead everywhere - including that same device again - immediately after, not just
+once it eventually expires.
 
 **One-time setup** (you do this once, not per-share):
 
@@ -261,22 +272,21 @@ anyone but the recipient ever sees it.
    this repo's GitHub settings: **Settings -> Pages -> Source -> Deploy from a branch
    -> Branch: `main`, Folder: `/docs`** -> Save. GitHub gives you a URL like
    `https://yourusername.github.io/PersonalVault/`.
-2. **Create a restricted Google API key** (separate from `credentials.json` - that one
-   is an OAuth client for *you* to sign in as yourself; this one lets the *viewer page*
-   fetch an already-public file's bytes without any sign-in at all). In
-   [Google Cloud Console](https://console.cloud.google.com/) -> the same project you
-   already made for Drive sync -> **APIs & Services -> Credentials -> Create
-   Credentials -> API key**. Then click into it and restrict it:
-   - **API restrictions** -> restrict to the **Google Drive API** only.
-   - **Application restrictions** -> **Websites** -> add
-     `https://yourusername.github.io/*`.
-   This key can then only ever be used to read bytes of Drive files that are *already*
-   shared "anyone with the link" - never anything private - so it being visible in the
-   page's own source (unavoidable for a page with no backend) is expected and safe.
-3. **Paste the API key into the viewer page:** open `docs/share/index.html`, find
-   `DRIVE_API_KEY = "YOUR-RESTRICTED-DRIVE-API-KEY"` near the top of the `<script>`,
-   and replace it with the key from step 2. Commit and push - GitHub Pages redeploys
-   automatically.
+2. **Deploy the Apps Script Web App.** Go to [script.google.com](https://script.google.com/)
+   -> **New project** -> replace the default `Code.gs` contents with this repo's
+   `docs/share/AppsScript/Code.gs` -> **Deploy -> New deployment**:
+   - Select type **Web app**.
+   - **Execute as: Me** (your Google account - this is what lets it read a private
+     Drive file on the recipient's behalf).
+   - **Who has access: Anyone** (not "Anyone with a Google account" - recipients must
+     not need to sign in to anything).
+   - Deploy, then copy the `.../exec` URL it gives you.
+3. **Paste the Web App URL into the viewer page:** open `docs/share/index.html`, find
+   `APPS_SCRIPT_URL = "https://script.google.com/macros/s/YOUR-DEPLOYMENT-ID/exec"`
+   near the top of the `<script>`, and replace it with the URL from step 2. Commit and
+   push - GitHub Pages redeploys automatically. (Unlike the old API-key approach, this
+   URL isn't a secret to protect - the only thing anyone could do by knowing it is
+   trigger the same "serve once, then delete" behavior the app already relies on.)
 4. **Set your GitHub username in the app:** tray menu (or the account list window) ->
    **Profile...** -> **GitHub username (for Share links)** -> enter the same username
    from your Pages URL in step 1 -> **Save**. This is stored in your local settings and
@@ -287,33 +297,33 @@ anyone but the recipient ever sees it.
    renamed the repo, the link the app builds won't match your real Pages URL.
 
 **Using it:** in the account list window, select an account -> **Share...** -> pick how
-long the link should stay live -> **Create Link**. The link is copied to your clipboard
-automatically. Anyone who opens it sees that one account's details in their browser and
-can copy any field - no Personal Vault install, no Google account, no sign-in needed on
-their end. Manage or immediately kill an active link anytime from the tray menu's
-**Shared Links...**. If your GitHub username isn't set yet, **Share...** tells you to
-set it from Profile first instead of failing silently.
+long the link should stay live *if nobody opens it* -> **Create Link**. The link is
+copied to your clipboard automatically. The first person to open it sees that one
+account's details in their browser and can copy any field - no Personal Vault install,
+no Google account, no sign-in needed on their end - and the link is then dead for
+everyone, including if they refresh or reopen it themselves. Manage or immediately kill
+an unopened link anytime from the tray menu's **Shared Links...**. If your GitHub
+username isn't set yet, **Share...** tells you to set it from Profile first instead of
+failing silently.
 
 **Known limitations of this feature specifically** (see also "Known limitations" below):
 
-- **This is expiring, not a true one-time view.** Nothing server-side can mark a link
-  "already viewed and gone" the instant it's opened, because there is no server - only
-  Google Drive (which just serves bytes to anyone with the link) and this app's own
-  background sweep. In practice that means: the link works for anyone who has it until
-  it expires (1 hour to 7 days, your choice) or until you revoke it yourself from
-  "Shared Links...". Pick the shortest expiration that's actually convenient, and revoke
-  manually as soon as you know it's been seen if you want it gone sooner.
-- **The app needs to be running for expired links to actually get cleaned up** - the
-  sweep is a timer inside Personal Vault (every 15 minutes while it's running in the
-  tray), not something Google Drive does on its own. If the app is closed for a long
-  stretch, an expired-but-not-yet-swept link's Drive file can still technically be
-  fetched until the app runs again - the viewer page also refuses to *display* content
-  past its embedded expiration time as a courtesy, but that's a client-side check, not
-  real enforcement.
-- **The Drive API key in `docs/share/index.html` is visible to anyone who views the
-  page's source** - this is inherent to a page with no backend, not a bug. The
-  referrer restriction from step 2 above limits what it can be used for even if copied:
-  fetching bytes of files already marked "anyone with the link," nothing else.
+- **The management list ("Shared Links...") can't always tell the difference between
+  "opened" and "still active."** The Apps Script Web App deletes the Drive file the
+  moment someone opens the link, but has no way to report that back to the desktop
+  app - so an already-viewed link still shows as "Active" there until its normal
+  expiration time passes and the next background sweep discovers the file is already
+  gone. The link itself is genuinely dead the instant it's opened either way; only the
+  list's status label lags behind.
+- **The app needs to be running for expired-but-never-opened links to actually get
+  cleaned up** - the sweep is a timer inside Personal Vault (every 15 minutes while
+  it's running in the tray), not something Google Drive does on its own. This only
+  matters for a link nobody ever opened; an opened link is already deleted by Apps
+  Script regardless of whether the desktop app is running.
+- **The Apps Script deployment and the GitHub Pages viewer page are both under your own
+  Google/GitHub accounts** - if you ever revoke the Apps Script deployment or take down
+  the Pages site, existing links stop working (fails the same way as an already-viewed
+  or expired one, from the recipient's point of view).
 
 ## First run
 
@@ -392,9 +402,10 @@ if you genuinely want a fresh start.
   interactively end-to-end (add an account, sync, share a link, etc.) on a real
   Windows desktop session - see the toast-notification note below for the one area
   most likely to need a build/fix pass of its own.
-- Share Account links are expiring, not a true one-time view, and need the app running
-  for expired ones to actually get cleaned up on Drive - see "Sharing an account
-  (one-time link)" above for the full explanation and setup.
+- Share Account links are a real one-time view once the Apps Script Web App is deployed
+  (see "Sharing an account (one-time link)" above) - the desktop app's own "Shared
+  Links..." list just can't always tell an already-opened link apart from a still-active
+  one until its normal expiration passes.
 - The default data folder is now next to the `.exe` rather than a fixed `%AppData%`
   location - moving/copying just the `.exe` without its sibling `PersonalVault` data
   folder leaves the data behind. Use Profile -> **Change Data Folder...** first if you

@@ -262,15 +262,18 @@ public class GoogleDriveSync
     }
 
     /// <summary>
-    /// Uploads a brand-new, publicly-link-readable Drive file for the "Share Account"
-    /// feature - always a Files.Create (unlike UploadOrUpdateAsync, a share is never
-    /// updated in place, only created once and later deleted), followed by a
-    /// Permissions.Create granting "anyone with the link" read access, since every other
-    /// file this app creates is deliberately private. Returns the new file's id and the
-    /// id of the permission just granted (the latter is only kept for reference -
-    /// RevokeShareAsync deletes the whole file rather than targeting the permission).
+    /// Uploads a brand-new Drive file for the "Share Account" feature - always a
+    /// Files.Create (unlike UploadOrUpdateAsync, a share is never updated in place,
+    /// only created once and later deleted). Unlike every other upload path in this
+    /// class, callers do NOT grant "anyone with the link" access here: the file stays
+    /// completely private. It's only ever read by the vault owner's own Google Apps
+    /// Script Web App (docs/share/AppsScript/Code.gs, run "as me" regardless of who
+    /// calls it), which serves it exactly once and deletes it in the same request -
+    /// that's what makes a real one-time view possible without the recipient ever
+    /// needing a Google account or any Drive access of their own. See README.md's
+    /// "Sharing an account (one-time link)" section for the full setup.
     /// </summary>
-    public async Task<(string FileId, string? PermissionId)> UploadShareAsync(byte[] blob, string fileName)
+    public async Task<string> UploadShareAsync(byte[] blob, string fileName)
     {
         RequireAuthenticated();
         DebugLog.Write($"UploadShareAsync: creating new share file '{fileName}', {blob.Length} byte(s)...");
@@ -290,15 +293,8 @@ public class GoogleDriveSync
             }
 
             string fileId = createRequest.ResponseBody.Id;
-            DebugLog.Write($"UploadShareAsync: create succeeded, new file id '...{Suffix(fileId)}'. Granting anyone-with-link read access...");
-
-            var permission = new Google.Apis.Drive.v3.Data.Permission { Type = "anyone", Role = "reader" };
-            var permissionRequest = _service.Permissions.Create(permission, fileId);
-            permissionRequest.Fields = "id";
-            var createdPermission = await permissionRequest.ExecuteAsync();
-
-            DebugLog.Write($"UploadShareAsync: granted anyone-with-link read access, permission id '...{Suffix(createdPermission.Id)}'.");
-            return (fileId, createdPermission.Id);
+            DebugLog.Write($"UploadShareAsync: create succeeded, new file id '...{Suffix(fileId)}'. Left private - only the Apps Script Web App can read it.");
+            return fileId;
         }
         catch (Exception ex)
         {
