@@ -1,0 +1,296 @@
+<title>Sharing Personal Vault With Family</title>
+<style>
+  :root {
+    --paper: #f7f4ee;
+    --paper-raised: #ffffff;
+    --ink: #1e2430;
+    --ink-soft: #5b6472;
+    --rule: #ddd6c7;
+    --brass: #93672c;
+    --brass-strong: #7a5322;
+    --brass-wash: #f0e4cd;
+    --teal: #2f6b4f;
+    --teal-wash: #e3efe7;
+    --rust: #a34a24;
+    --rust-wash: #f6e6dc;
+    --mono-chip-bg: #eee9dc;
+    --mono-chip-ink: #4a4335;
+    --shadow: 0 1px 2px rgba(30,36,48,0.06), 0 8px 24px rgba(30,36,48,0.06);
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --paper: #14171d; --paper-raised: #1c212a; --ink: #ece8de; --ink-soft: #a1a7b3;
+      --rule: #333a46; --brass: #cf9f54; --brass-strong: #e2b46e; --brass-wash: #2c2418;
+      --teal: #7cc9a3; --teal-wash: #16261e; --rust: #e2895d; --rust-wash: #2c1c14;
+      --mono-chip-bg: #262b34; --mono-chip-ink: #cfd3da;
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #14171d; --paper-raised: #1c212a; --ink: #ece8de; --ink-soft: #a1a7b3;
+    --rule: #333a46; --brass: #cf9f54; --brass-strong: #e2b46e; --brass-wash: #2c2418;
+    --teal: #7cc9a3; --teal-wash: #16261e; --rust: #e2895d; --rust-wash: #2c1c14;
+    --mono-chip-bg: #262b34; --mono-chip-ink: #cfd3da;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    font-size: 16px; line-height: 1.6;
+    padding-inline: 20px; padding-block: 48px 96px;
+  }
+  h1, h2, h3 { font-family: "Fraunces", Georgia, serif; text-wrap: balance; margin: 0; }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--brass-strong); background: var(--brass-wash);
+    border-radius: 999px; padding: 5px 12px 5px 10px; margin-bottom: 22px;
+  }
+  .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--brass); }
+  header h1 { font-size: clamp(30px, 5vw, 42px); font-weight: 600; line-height: 1.08; letter-spacing: -0.01em; }
+  header .sub { margin-top: 14px; font-size: 17px; color: var(--ink-soft); max-width: 58ch; }
+  .panel {
+    background: var(--paper-raised); border: 1px solid var(--rule); border-radius: 14px;
+    box-shadow: var(--shadow); padding: 22px 24px; margin-top: 28px;
+  }
+  .panel h2 {
+    font-size: 15px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--brass-strong); margin-bottom: 10px;
+  }
+  .send-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
+  .send-col h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; font-family: "Source Sans 3", sans-serif; }
+  .send-col.yes h3 { color: var(--teal); }
+  .send-col.no h3 { color: var(--rust); }
+  .send-col ul { margin: 0; padding-left: 20px; }
+  .send-col li { margin-bottom: 6px; font-size: 14.5px; }
+  @media (max-width: 520px) { .send-grid { grid-template-columns: 1fr; } }
+  .steps { margin-top: 40px; position: relative; }
+  .steps::before {
+    content: ""; position: absolute; left: 21px; top: 8px; bottom: 8px;
+    width: 2px; background: var(--rule);
+  }
+  .step { position: relative; padding-left: 60px; margin-bottom: 34px; }
+  .step:last-child { margin-bottom: 0; }
+  .step-badge {
+    position: absolute; left: 0; top: 0; width: 44px; height: 44px; border-radius: 50%;
+    background: var(--paper-raised); border: 2px solid var(--brass); color: var(--brass-strong);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; font-size: 16px;
+    display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow);
+  }
+  .step h3 { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+  .crumb {
+    display: inline-flex; align-items: center; font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12.5px; color: var(--mono-chip-ink); background: var(--mono-chip-bg);
+    border-radius: 6px; padding: 4px 9px; margin-bottom: 12px;
+  }
+  .step p { margin: 10px 0 0; }
+  .step ul, .step ol { margin: 10px 0 0; padding-left: 22px; }
+  .step li { margin-bottom: 6px; }
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.92em;
+    background: var(--mono-chip-bg); color: var(--mono-chip-ink);
+    padding: 0.1em 0.4em; border-radius: 4px;
+  }
+  pre {
+    background: var(--mono-chip-bg); color: var(--mono-chip-ink); padding: 12px 14px;
+    border-radius: 8px; overflow-x: auto; font-size: 13px; margin-top: 10px;
+  }
+  pre code { background: none; padding: 0; }
+  .callout {
+    margin-top: 14px; border-radius: 10px; padding: 13px 16px; font-size: 14.5px;
+    display: flex; gap: 10px;
+  }
+  .callout .icon { flex: none; font-size: 15px; line-height: 1.5; }
+  .callout.gotcha { background: var(--rust-wash); color: var(--rust); }
+  .callout.gotcha strong { color: var(--rust); }
+  .callout.note { background: var(--mono-chip-bg); color: var(--ink-soft); }
+  .callout.done { background: var(--teal-wash); color: var(--teal); }
+  .callout p, .callout span { margin: 0; }
+  .callout b { color: inherit; }
+  .trouble { margin-top: 44px; }
+  .trouble h2 { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
+  .trouble .sub { color: var(--ink-soft); margin-bottom: 20px; font-size: 14.5px; }
+  .qa {
+    background: var(--paper-raised); border: 1px solid var(--rule); border-radius: 12px;
+    padding: 16px 18px; margin-bottom: 12px; box-shadow: var(--shadow);
+  }
+  .qa .q { font-weight: 600; font-size: 15px; display: flex; gap: 8px; }
+  .qa .q .mark { color: var(--rust); font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  .qa .a { margin-top: 6px; font-size: 14.5px; color: var(--ink-soft); }
+  .qa .a code { font-size: 0.9em; }
+  footer {
+    margin-top: 48px; padding-top: 22px; border-top: 1px solid var(--rule);
+    font-size: 13.5px; color: var(--ink-soft); display: flex; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap;
+  }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow"><span class="dot"></span>One project covers the whole family - each person still gets their own vault</div>
+    <h1>Sharing Personal Vault with family</h1>
+    <p class="sub">
+      Different from sharing with a friend: here it's fine to hand out your own
+      <code>credentials.json</code> — it only identifies the app to Google, not any
+      person's data. Everyone still creates their own master secret, their own vault,
+      and signs in with their own separate Google account for their own separate Drive
+      file, even though you all share one Google Cloud project.
+    </p>
+  </header>
+
+  <div class="panel">
+    <h2>What to send / what to keep private</h2>
+    <div class="send-grid">
+      <div class="send-col yes">
+        <h3>✓ Safe to share with family</h3>
+        <ul>
+          <li>The zipped <code>publish\</code> folder (the app)</li>
+          <li>Your <code>credentials.json</code>, copied into that same folder</li>
+        </ul>
+      </div>
+      <div class="send-col no">
+        <h3>✕ Keep this private, always</h3>
+        <ul>
+          <li>Your <code>vault.pvlt</code> / data folder</li>
+          <li>Your master secret</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="steps">
+
+    <div class="step">
+      <div class="step-badge">1</div>
+      <span class="crumb">Google Cloud Console → Google Auth Platform → Audience</span>
+      <h3>Add each family member as a test user</h3>
+      <p>
+        You don't need to repeat the Google Cloud Console setup per person — in the
+        same project you already created for your own Drive sync, go to
+        <b>Google Auth Platform → Audience → Test users → Add users</b>, and add each
+        family member's own Gmail address (up to 100). This is the one step that truly
+        can't be automated: Google requires each person's own account to be explicitly
+        allowed before they can sign in through your app's OAuth client.
+      </p>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">2</div>
+      <span class="crumb">Command prompt → PersonalVault project folder</span>
+      <h3>Build a portable, self-contained copy</h3>
+      <pre><code>dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish</code></pre>
+      <p>
+        Produces a <code>publish\</code> folder with <code>PersonalVault.exe</code> and
+        everything it needs bundled in (roughly 100-150 MB, since the .NET runtime is
+        included — no separate install needed on their end).
+      </p>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">3</div>
+      <span class="crumb">File Explorer</span>
+      <h3>Copy your credentials.json into that same folder</h3>
+      <p>
+        Put it right next to <code>PersonalVault.exe</code> inside <code>publish\</code>.
+        This is safe to share — it only identifies the <i>app</i> to Google, it is not a
+        credential to your data, and each family member still authorizes with their own
+        Google account (added in step 1) and gets their own separate Drive file.
+      </p>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">4</div>
+      <span class="crumb">Zip &amp; send</span>
+      <h3>Zip the publish folder and send it</h3>
+      <p>
+        Email, USB drive, shared folder — however you'd share any file. Do not include
+        your own <code>vault.pvlt</code>, data folder, or master secret in the zip.
+      </p>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">5</div>
+      <span class="crumb">Their PC</span>
+      <h3>They unzip and run it — everything after this is automatic</h3>
+      <ol>
+        <li>Unzip anywhere and double-click <code>PersonalVault.exe</code> — no install,
+          no admin rights needed.</li>
+        <li>The app automatically copies your bundled <code>credentials.json</code> into
+          their own data folder the moment it sees one sitting next to the .exe — they
+          never have to find that folder or copy anything by hand.</li>
+        <li>They choose their own master secret: minimum 12 characters, with uppercase,
+          lowercase, and a symbol. There's no password reset — losing it means losing
+          the vault.</li>
+        <li>The app then directly asks <i>"Connect Google Drive now?"</i> — clicking Yes
+          pops the same one-time Google sign-in browser window you saw, just for their
+          own account (the one you added in step 1).</li>
+      </ol>
+      <div class="callout done">
+        <span class="icon">✓</span>
+        <span>From there, their vault, their Drive file, and their secret are entirely
+        their own — completely separate from yours and from every other family member's,
+        even though you all got the app from the same zip and the same
+        <code>credentials.json</code>.</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="trouble">
+    <h2>Notes and troubleshooting</h2>
+    <div class="sub">The things that actually come up sharing this within a family.</div>
+
+    <div class="qa">
+      <div class="q"><span class="mark">?</span> Can I see their accounts, since we share a Google Cloud project?</div>
+      <div class="a">No. The Google Cloud project only identifies the <i>app</i> to
+      Google — each person's vault is its own AES-256-GCM encrypted file, on their own
+      Drive, readable only with their own master secret. Nobody, including you, can see
+      another family member's accounts.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="mark">?</span> A family member wasn't prompted to sign in to Drive</div>
+      <div class="a">This only happens automatically on a genuinely first run with
+      <code>credentials.json</code> already in place. If they skipped it, they can do it
+      anytime later from the tray menu → <b>Sign in to Google Drive</b>.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="mark">?</span> "This app isn't verified" or a similar Google warning</div>
+      <div class="a">Expected while the OAuth consent screen is in "Testing" mode (the
+      normal state for a personal project) — this is exactly why step 1 (adding each
+      person as a test user) matters. Click through the "Advanced" / "Go to (app
+      name)" link Google shows for apps in testing.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="mark">?</span> Someone hit the 100 test-user limit</div>
+      <div class="a">That cap is per Google Cloud project, not per person. If you
+      genuinely need more than 100 people on one project, Google's consent screen can be
+      published beyond "Testing," which has its own separate verification requirements
+      — unlikely to matter for a family, but worth knowing it's there.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="mark">?</span> Want the one-time Share Account link feature too?</div>
+      <div class="a">That's a separate, unrelated feature (unrelated to Drive backup)
+      with its own fully self-service setup — see
+      <code>PersonalVault-Share-Setup-Guide.html</code> in this same folder. Each person
+      who wants to use it needs their own GitHub Pages site and their own Apps Script
+      deployment; it can't be shared the way <code>credentials.json</code> can.</div>
+    </div>
+  </div>
+
+  <footer>
+    <span>Personal Vault — sharing with family</span>
+    <span>One project, one credentials.json, separate vaults throughout</span>
+  </footer>
+
+</div>

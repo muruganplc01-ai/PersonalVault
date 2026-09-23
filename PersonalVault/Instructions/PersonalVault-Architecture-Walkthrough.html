@@ -1,0 +1,358 @@
+<title>Personal Vault — Architecture Walkthrough</title>
+<style>
+  :root {
+    --paper: #f7f4ee;
+    --paper-raised: #ffffff;
+    --ink: #1e2430;
+    --ink-soft: #5b6472;
+    --rule: #ddd6c7;
+    --brass: #93672c;
+    --brass-strong: #7a5322;
+    --brass-wash: #f0e4cd;
+    --teal: #2f6b4f;
+    --teal-wash: #e3efe7;
+    --rust: #a34a24;
+    --rust-wash: #f6e6dc;
+    --mono-chip-bg: #eee9dc;
+    --mono-chip-ink: #4a4335;
+    --shadow: 0 1px 2px rgba(30,36,48,0.06), 0 8px 24px rgba(30,36,48,0.06);
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --paper: #14171d; --paper-raised: #1c212a; --ink: #ece8de; --ink-soft: #a1a7b3;
+      --rule: #333a46; --brass: #cf9f54; --brass-strong: #e2b46e; --brass-wash: #2c2418;
+      --teal: #7cc9a3; --teal-wash: #16261e; --rust: #e2895d; --rust-wash: #2c1c14;
+      --mono-chip-bg: #262b34; --mono-chip-ink: #cfd3da;
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #14171d; --paper-raised: #1c212a; --ink: #ece8de; --ink-soft: #a1a7b3;
+    --rule: #333a46; --brass: #cf9f54; --brass-strong: #e2b46e; --brass-wash: #2c2418;
+    --teal: #7cc9a3; --teal-wash: #16261e; --rust: #e2895d; --rust-wash: #2c1c14;
+    --mono-chip-bg: #262b34; --mono-chip-ink: #cfd3da;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    font-size: 16px; line-height: 1.6;
+    padding-inline: 20px; padding-block: 48px 96px;
+  }
+  h1, h2, h3 { font-family: "Fraunces", Georgia, serif; text-wrap: balance; margin: 0; }
+  .wrap { max-width: 820px; margin: 0 auto; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--brass-strong); background: var(--brass-wash);
+    border-radius: 999px; padding: 5px 12px 5px 10px; margin-bottom: 22px;
+  }
+  .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--brass); }
+  header h1 { font-size: clamp(28px, 4.5vw, 40px); font-weight: 600; line-height: 1.1; letter-spacing: -0.01em; }
+  header .sub { margin-top: 14px; font-size: 17px; color: var(--ink-soft); max-width: 68ch; }
+  h2.section {
+    margin-top: 48px; margin-bottom: 4px; font-size: 24px; font-weight: 600;
+  }
+  .section-sub { color: var(--ink-soft); margin-bottom: 20px; font-size: 14.5px; }
+  .panel {
+    background: var(--paper-raised); border: 1px solid var(--rule); border-radius: 14px;
+    box-shadow: var(--shadow); padding: 22px 24px; margin-top: 18px;
+  }
+  .panel h3 {
+    font-size: 15px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--brass-strong); margin-bottom: 10px;
+  }
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.9em;
+    background: var(--mono-chip-bg); color: var(--mono-chip-ink);
+    padding: 0.1em 0.4em; border-radius: 4px;
+  }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14.5px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); }
+  .tree {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px;
+    background: var(--mono-chip-bg); color: var(--mono-chip-ink);
+    padding: 16px 18px; border-radius: 10px; line-height: 1.7; overflow-x: auto;
+    white-space: pre;
+  }
+  .steps { margin-top: 24px; position: relative; }
+  .steps::before {
+    content: ""; position: absolute; left: 17px; top: 6px; bottom: 6px;
+    width: 2px; background: var(--rule);
+  }
+  .step { position: relative; padding-left: 50px; margin-bottom: 22px; }
+  .step:last-child { margin-bottom: 0; }
+  .step-badge {
+    position: absolute; left: 0; top: 0; width: 36px; height: 36px; border-radius: 50%;
+    background: var(--paper-raised); border: 2px solid var(--brass); color: var(--brass-strong);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; font-size: 14px;
+    display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow);
+  }
+  .step h4 { font-size: 16px; font-weight: 600; margin: 0 0 4px; font-family: inherit; }
+  .step p { margin: 6px 0 0; font-size: 14.5px; }
+  .callout {
+    margin-top: 14px; border-radius: 10px; padding: 13px 16px; font-size: 14.5px;
+    display: flex; gap: 10px;
+  }
+  .callout .icon { flex: none; font-size: 15px; line-height: 1.5; }
+  .callout.note { background: var(--mono-chip-bg); color: var(--ink-soft); }
+  .callout.gotcha { background: var(--rust-wash); color: var(--rust); }
+  .callout b { color: inherit; }
+  footer {
+    margin-top: 48px; padding-top: 22px; border-top: 1px solid var(--rule);
+    font-size: 13.5px; color: var(--ink-soft); display: flex; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap;
+  }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow"><span class="dot"></span>For a developer picking up this codebase</div>
+    <h1>Personal Vault — Architecture Walkthrough</h1>
+    <p class="sub">
+      What this app is, what it's built with, where every file lives, how a save
+      actually reaches disk and Drive, and the full request path a one-time share link
+      takes from creation to consumption.
+    </p>
+  </header>
+
+  <h2 class="section">1. What this is</h2>
+  <div class="panel">
+    <p>
+      A Windows system-tray app (no main window that, if closed, ends the process) that
+      keeps one AES-256-GCM encrypted file as its single source of truth for a list of
+      account/credential records. There is no first-party server anywhere in this
+      system: the desktop app talks directly to Google Drive's REST API for backup, and
+      a separate, optional feature (one-time share links) is served by a static page on
+      GitHub Pages plus a small Google Apps Script Web App — both running under the
+      vault owner's own accounts, not any infrastructure this project operates.
+    </p>
+  </div>
+
+  <h2 class="section">2. Tech stack</h2>
+  <div class="panel">
+    <table>
+      <tr><th>Layer</th><th>Technology</th></tr>
+      <tr><td>Desktop app</td><td>.NET 8, WinForms, target <code>net8.0-windows10.0.19041.0</code> (the Windows-10-SDK-versioned TFM is only needed for the toast notification library)</td></tr>
+      <tr><td>Vault &amp; share encryption</td><td><code>System.Security.Cryptography</code> — <code>AesGcm</code>, <code>Rfc2898DeriveBytes</code> (PBKDF2). No third-party crypto library; these call into Windows' native CNG/BCrypt.</td></tr>
+      <tr><td>Cloud backup</td><td><code>Google.Apis.Drive.v3</code> — OAuth "Desktop app" (installed-app/loopback) flow, Drive REST API v3, narrow <code>drive.file</code> scope</td></tr>
+      <tr><td>Notifications</td><td><code>Microsoft.Toolkit.Uwp.Notifications</code> (Windows action-center toasts), tray balloon as fallback</td></tr>
+      <tr><td>One-time share viewer</td><td>Static HTML + vanilla JS (no framework, no build step), Web Crypto API (<code>crypto.subtle</code>), hosted on GitHub Pages</td></tr>
+      <tr><td>One-time share backend</td><td>Google Apps Script (V8 runtime), deployed as a Web App, using <code>DriveApp</code> and <code>LockService</code></td></tr>
+    </table>
+  </div>
+
+  <h2 class="section">3. Where the code lives</h2>
+  <div class="section-sub">Everything under <code>PersonalVault/</code> is the .NET project; <code>docs/share/</code> is the separate static site + server script, versioned in the same repo but deployed independently.</div>
+  <div class="panel">
+    <div class="tree">PersonalVault.sln
+PersonalVault/
+  Program.cs                     Entry point - single-instance mutex, applies a
+                                  saved data-folder override, starts the tray context
+  Models/
+    AccountEntry.cs               One credential record + Category/CategoryFieldSpec
+    BankSubAccount.cs              Checking/Savings/etc. under a BankAccount entry
+    VaultData.cs                   The whole vault: accounts + profile
+    VaultProfile.cs                 Owner display name/picture
+    SharedLink.cs                  Bookkeeping for one active share (Drive file id, expiry)
+    SharedAccountPayload.cs        What actually gets encrypted for a share
+  Security/
+    VaultCrypto.cs                 AES-256-GCM + PBKDF2 for the vault file
+    ShareCrypto.cs                  AES-256-GCM (random key, no password) for a share
+    PasswordPolicy.cs               Minimum-strength rule for a new/changed master secret
+  Storage/
+    VaultStorage.cs                 VaultData &lt;-&gt; encrypted bytes &lt;-&gt; vault.pvlt
+    PaymentsStorage.cs               Same pattern, for payment history
+    SharesStorage.cs                  Load/save shares.json (unencrypted bookkeeping)
+    GoogleDriveSync.cs               All Drive API calls: auth, upload/download, sharing
+    AppPaths.cs                      Every file/folder location this app touches
+    AppSettings.cs                   Small non-secret local preferences
+  Services/
+    DueDateNotifier.cs               Due-date scanning + notifications
+    ShareExpiryService.cs             Background sweep that revokes expired shares
+    ToastNotifier.cs / ToastActivator.cs   Toast notification plumbing
+  Forms/
+    TrayApplicationContext.cs        The real app root - owns tray icon, vault, Drive
+    MainForm.cs                       Account list, Dues tab, Overview tab
+    AccountEditForm.cs                 Add/edit one account
+    CreditCardDetailsForm.cs            Structured popup for CreditCard entries
+    BankAccountsForm.cs / BankSubAccountForm.cs   Sub-account list/editor
+    ShareAccountForm.cs / SharedLinksForm.cs        Create/manage share links
+    UnlockForm.cs / ChangeSecretForm.cs              Master secret entry/change
+    ProfileForm.cs / SettingsForm.cs                  Preferences UI
+  Utils/
+    StartupManager.cs                 "Start with Windows" registry entry
+    CredentialBootstrap.cs             Copies a bundled credentials.json in on first run
+    DataFolderLocation.cs               Registry-backed data-folder override pointer
+    DataFolderMover.cs                   Implements "Change Data Folder..."
+    CsvIO.cs, BalanceCsvImporter.cs, SystemIdleTime.cs, BrowserLauncher.cs
+
+docs/share/
+  index.html                        Static viewer page (GitHub Pages, /docs source)
+  AppsScript/Code.gs                 Pasted manually into script.google.com - NOT built
+                                      or deployed by anything in this repo/CI</div>
+  </div>
+
+  <h2 class="section">4. Where credentials and secrets are actually saved</h2>
+  <div class="panel">
+    <table>
+      <tr><th>File / location</th><th>Contains</th><th>Sensitivity</th></tr>
+      <tr><td><code>vault.pvlt</code></td><td>AES-256-GCM ciphertext of the whole vault's JSON</td><td>Useless without the master secret</td></tr>
+      <tr><td><code>payments.pvlt</code></td><td>Same encryption, for payment history</td><td>Same</td></tr>
+      <tr><td><code>credentials.json</code></td><td>OAuth "Desktop app" client id + client secret</td><td>Identifies the <i>app</i> to Google, not a per-user credential — Google's own docs treat installed-app client secrets as non-confidential</td></tr>
+      <tr><td><code>drive-token\</code></td><td>Cached OAuth refresh token (Google's <code>FileDataStore</code> format)</td><td><b>Genuinely sensitive</b> — grants Drive access (drive.file scope only) until revoked at myaccount.google.com/permissions</td></tr>
+      <tr><td><code>settings.json</code></td><td>Non-secret prefs, cached Drive file ids, GitHub username</td><td>Low</td></tr>
+      <tr><td><code>shares.json</code></td><td>Active share bookkeeping (Drive file id, expiry, revoked flag) — <i>not</i> the decryption key</td><td>Low</td></tr>
+      <tr><td>Master secret</td><td>Never written anywhere</td><td>Exists only as an in-memory string while the vault is unlocked</td></tr>
+      <tr><td><code>HKCU\Software\PersonalVault\DataFolder</code></td><td>A custom data-folder path, if "Change Data Folder..." was used</td><td>Not sensitive — just a path</td></tr>
+    </table>
+    <div class="callout note">
+      <span class="icon">📁</span>
+      <span>All of the file-based rows above live together in one folder — see
+      <code>Storage/AppPaths.cs</code>. Default: a <code>PersonalVault</code> folder
+      created next to the running <code>.exe</code>. The registry key is read once at
+      startup (<code>Program.cs</code>, before anything else touches <code>AppPaths</code>)
+      to override that default if the user relocated it.</span>
+    </div>
+  </div>
+
+  <h2 class="section">5. Vault save/load flow</h2>
+  <div class="steps">
+    <div class="step"><div class="step-badge">1</div>
+      <h4>Unlock</h4>
+      <p><code>UnlockForm</code> collects the secret → <code>VaultCrypto.Decrypt</code>
+      derives a key via PBKDF2 using the salt stored in the file's header → AES-GCM
+      decrypt → JSON deserialize into a <code>VaultData</code> object held in memory by
+      <code>TrayApplicationContext</code>.</p></div>
+    <div class="step"><div class="step-badge">2</div>
+      <h4>Edit</h4>
+      <p>Forms (<code>AccountEditForm</code>, <code>ProfileForm</code>, etc.) mutate that
+      in-memory <code>VaultData</code> directly. Nothing touches disk until Save.</p></div>
+    <div class="step"><div class="step-badge">3</div>
+      <h4>Save locally</h4>
+      <p><code>TrayApplicationContext.SaveVault()</code> → <code>VaultStorage.SaveLocal</code>:
+      serialize to JSON → <code>VaultCrypto.Encrypt</code> (a <b>fresh random salt and
+      nonce every single save</b>, never reused) → write to a <code>.tmp</code> file →
+      <code>File.Replace</code> into place, so a crash mid-write can never corrupt the
+      real file.</p></div>
+    <div class="step"><div class="step-badge">4</div>
+      <h4>Sync to Drive (fire-and-forget)</h4>
+      <p><code>UploadToDriveAsync</code> → <code>GoogleDriveSync.UploadOrUpdateAsync</code>
+      uploads the already-encrypted bytes as-is — Drive never receives plaintext at any
+      point. <code>PruneOldRevisionsAsync</code> then pins the new revision and prunes
+      anything beyond the last 5, using Drive's own revision history as a rolling
+      backup.</p></div>
+  </div>
+
+  <h2 class="section">6. One-time Share Account: the complete request path</h2>
+  <div class="section-sub">This is the part most worth understanding end to end before changing anything in it — a mistake here has real security consequences.</div>
+  <div class="steps">
+    <div class="step"><div class="step-badge">1</div>
+      <h4>Create the link (desktop app)</h4>
+      <p><code>ShareAccountForm</code> (expiration picker) →
+      <code>TrayApplicationContext.ShareAccountAsync</code> builds a
+      <code>SharedAccountPayload</code> (name, credentials, extra fields, bank
+      sub-accounts, an embedded <code>ExpiresUtc</code>) and JSON-serializes it.</p></div>
+    <div class="step"><div class="step-badge">2</div>
+      <h4>Encrypt</h4>
+      <p><code>ShareCrypto.Encrypt</code> generates a fresh random 256-bit key (not
+      derived from anything — there's no password for a share) and a random 96-bit
+      nonce, AES-256-GCM encrypts, and returns a blob:
+      <code>"PVSH" | version | nonce | ciphertext | tag</code>.</p></div>
+    <div class="step"><div class="step-badge">3</div>
+      <h4>Upload as a PRIVATE Drive file</h4>
+      <p><code>GoogleDriveSync.UploadShareAsync</code> does a plain <code>Files.Create</code>
+      — no sharing permission is ever granted. The file is readable by nobody except the
+      owner's own Google identity.</p></div>
+    <div class="step"><div class="step-badge">4</div>
+      <h4>Build the link</h4>
+      <p><code>https://&lt;github-username&gt;.github.io/PersonalVault/share/#id=&lt;driveFileId&gt;&amp;key=&lt;base64url-key&gt;&amp;exp=&lt;unixSeconds&gt;</code>
+      — the key and file id live only in the URL <b>fragment</b> (after <code>#</code>),
+      which browsers never include in any HTTP request, to any server, ever. A
+      <code>SharedLink</code> record (file id + expiry, <i>not</i> the key) is appended
+      to <code>shares.json</code> for bookkeeping.</p></div>
+    <div class="step"><div class="step-badge">5</div>
+      <h4>Recipient opens the link</h4>
+      <p><code>docs/share/index.html</code>'s JS reads <code>location.hash</code>
+      client-side, then <code>fetch()</code>es the Apps Script Web App's
+      <code>/exec?id=&lt;fileId&gt;</code> URL — note: the key is <b>not</b> sent in this
+      request at all.</p></div>
+    <div class="step"><div class="step-badge">6</div>
+      <h4>Apps Script consumes it (<code>Code.gs</code>, <code>doGet</code>)</h4>
+      <p>Runs "Execute as: Me" (the vault owner) regardless of caller. Acquires
+      <code>LockService.getScriptLock()</code> → <code>DriveApp.getFileById(id)</code> →
+      checks <code>file.isTrashed()</code> (critical: <code>getFileById</code> does
+      <b>not</b> throw for a trashed file, so skipping this check would let a link work
+      forever) → if fresh: reads bytes, base64-encodes them, <code>setTrashed(true)</code>,
+      returns the base64 text. If already trashed or the id doesn't resolve: returns the
+      literal string <code>GONE</code>.</p></div>
+    <div class="step"><div class="step-badge">7</div>
+      <h4>Decrypt client-side</h4>
+      <p>The browser base64-decodes the response, splits out the nonce, and calls
+      <code>crypto.subtle.decrypt</code> with the key parsed from the URL fragment back
+      in step 5 — the only place that key ever existed after creation. Renders the
+      fields with per-field copy buttons.</p></div>
+    <div class="step"><div class="step-badge">8</div>
+      <h4>Safety net for links nobody opens</h4>
+      <p><code>ShareExpiryService</code> (desktop app, 15-minute timer) independently
+      scans <code>shares.json</code> for entries past <code>ExpiresUtc</code> that
+      haven't been revoked, and deletes their Drive file outright via
+      <code>GoogleDriveSync.RevokeShareAsync</code> — this only matters for a link that
+      was <i>never</i> opened; an opened link is already gone via step 6 regardless of
+      whether the desktop app is even running.</p></div>
+  </div>
+  <div class="callout gotcha">
+    <span class="icon">⚠️</span>
+    <span><b>The desktop app cannot learn that a link was opened.</b> Apps Script has no
+    channel back to the .NET app. <code>SharedLinksForm</code>'s "Active" status can lag
+    reality until the next expiry sweep discovers the file is already gone — cosmetic
+    only, the link itself is genuinely dead the instant it's consumed.</span>
+  </div>
+
+  <h2 class="section">7. Build &amp; deploy</h2>
+  <div class="panel">
+    <table>
+      <tr><th>What</th><th>How</th></tr>
+      <tr><td>Portable desktop build</td><td><code>dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish</code></td></tr>
+      <tr><td>Share viewer page</td><td>GitHub Pages, Settings → Pages → Deploy from branch → <code>main</code> / <code>/docs</code>. Any push to <code>docs/share/index.html</code> redeploys automatically.</td></tr>
+      <tr><td>Apps Script backend</td><td><b>Manual only</b> — pasted into script.google.com and deployed via its own UI (Deploy → New deployment → Web app → Execute as Me → Anyone). Not built or deployed by anything in this repo or CI.</td></tr>
+    </table>
+    <div class="callout note">
+      <span class="icon">🛠️</span>
+      <span>This repo's own <code>PersonalVault.csproj</code> currently has a local dev
+      convenience: <code>&lt;OutputPath&gt;C:\Personal\&lt;/OutputPath&gt;</code>. That's
+      one developer's machine-specific preference, not a project convention — worth
+      reviewing before anyone else builds from this repo.</span>
+    </div>
+  </div>
+
+  <h2 class="section">8. "Where do I change…" quick reference</h2>
+  <div class="panel">
+    <table>
+      <tr><th>Want to change…</th><th>Look at</th></tr>
+      <tr><td>Vault encryption scheme</td><td><code>Security/VaultCrypto.cs</code></td></tr>
+      <tr><td>Share-link encryption scheme</td><td><code>Security/ShareCrypto.cs</code></td></tr>
+      <tr><td>Master password policy</td><td><code>Security/PasswordPolicy.cs</code></td></tr>
+      <tr><td>Drive upload/download/permissions</td><td><code>Storage/GoogleDriveSync.cs</code></td></tr>
+      <tr><td>Where files live on disk, or the override mechanism</td><td><code>Storage/AppPaths.cs</code>, <code>Utils/DataFolderLocation.cs</code>, <code>Utils/DataFolderMover.cs</code></td></tr>
+      <tr><td>Share-link expiry sweep</td><td><code>Services/ShareExpiryService.cs</code></td></tr>
+      <tr><td>The public share viewer page</td><td><code>docs/share/index.html</code></td></tr>
+      <tr><td>The one-time-consume backend</td><td><code>docs/share/AppsScript/Code.gs</code> (redeploy manually after editing)</td></tr>
+      <tr><td>Account/bank sub-account data model</td><td><code>Models/AccountEntry.cs</code>, <code>Models/BankSubAccount.cs</code></td></tr>
+      <tr><td>Main UI / app lifecycle</td><td><code>Forms/MainForm.cs</code>, <code>Forms/TrayApplicationContext.cs</code>, <code>Program.cs</code></td></tr>
+    </table>
+  </div>
+
+  <footer>
+    <span>Personal Vault — architecture walkthrough</span>
+    <span>See PersonalVault-Security-Deep-Dive.html for the cryptography in detail</span>
+  </footer>
+
+</div>

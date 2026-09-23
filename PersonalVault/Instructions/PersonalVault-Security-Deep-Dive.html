@@ -1,0 +1,346 @@
+<title>Personal Vault — Security Deep Dive</title>
+<style>
+  :root {
+    --paper: #f7f4ee;
+    --paper-raised: #ffffff;
+    --ink: #1e2430;
+    --ink-soft: #5b6472;
+    --rule: #ddd6c7;
+    --brass: #93672c;
+    --brass-strong: #7a5322;
+    --brass-wash: #f0e4cd;
+    --teal: #2f6b4f;
+    --teal-wash: #e3efe7;
+    --rust: #a34a24;
+    --rust-wash: #f6e6dc;
+    --mono-chip-bg: #eee9dc;
+    --mono-chip-ink: #4a4335;
+    --shadow: 0 1px 2px rgba(30,36,48,0.06), 0 8px 24px rgba(30,36,48,0.06);
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --paper: #14171d; --paper-raised: #1c212a; --ink: #ece8de; --ink-soft: #a1a7b3;
+      --rule: #333a46; --brass: #cf9f54; --brass-strong: #e2b46e; --brass-wash: #2c2418;
+      --teal: #7cc9a3; --teal-wash: #16261e; --rust: #e2895d; --rust-wash: #2c1c14;
+      --mono-chip-bg: #262b34; --mono-chip-ink: #cfd3da;
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #14171d; --paper-raised: #1c212a; --ink: #ece8de; --ink-soft: #a1a7b3;
+    --rule: #333a46; --brass: #cf9f54; --brass-strong: #e2b46e; --brass-wash: #2c2418;
+    --teal: #7cc9a3; --teal-wash: #16261e; --rust: #e2895d; --rust-wash: #2c1c14;
+    --mono-chip-bg: #262b34; --mono-chip-ink: #cfd3da;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    font-size: 16px; line-height: 1.6;
+    padding-inline: 20px; padding-block: 48px 96px;
+  }
+  h1, h2, h3 { font-family: "Fraunces", Georgia, serif; text-wrap: balance; margin: 0; }
+  .wrap { max-width: 820px; margin: 0 auto; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--brass-strong); background: var(--brass-wash);
+    border-radius: 999px; padding: 5px 12px 5px 10px; margin-bottom: 22px;
+  }
+  .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--brass); }
+  header h1 { font-size: clamp(28px, 4.5vw, 40px); font-weight: 600; line-height: 1.1; letter-spacing: -0.01em; }
+  header .sub { margin-top: 14px; font-size: 17px; color: var(--ink-soft); max-width: 68ch; }
+  h2.section { margin-top: 48px; margin-bottom: 4px; font-size: 24px; font-weight: 600; }
+  .section-sub { color: var(--ink-soft); margin-bottom: 20px; font-size: 14.5px; }
+  .panel {
+    background: var(--paper-raised); border: 1px solid var(--rule); border-radius: 14px;
+    box-shadow: var(--shadow); padding: 22px 24px; margin-top: 18px;
+  }
+  .panel h3 {
+    font-size: 15px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--brass-strong); margin-bottom: 10px;
+  }
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.9em;
+    background: var(--mono-chip-bg); color: var(--mono-chip-ink);
+    padding: 0.1em 0.4em; border-radius: 4px;
+  }
+  .filelayout {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px;
+    background: var(--mono-chip-bg); color: var(--mono-chip-ink);
+    padding: 14px 16px; border-radius: 10px; line-height: 1.8; overflow-x: auto;
+    white-space: pre;
+  }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14.5px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
+  .two-col .col h4 {
+    font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 8px;
+    font-family: "Source Sans 3", sans-serif; font-weight: 700;
+  }
+  .two-col .col.good h4 { color: var(--teal); }
+  .two-col .col.bad h4 { color: var(--rust); }
+  .two-col ul { margin: 0; padding-left: 20px; }
+  .two-col li { margin-bottom: 8px; font-size: 14.5px; }
+  @media (max-width: 560px) { .two-col { grid-template-columns: 1fr; } }
+  .steps { margin-top: 24px; position: relative; }
+  .steps::before {
+    content: ""; position: absolute; left: 17px; top: 6px; bottom: 6px;
+    width: 2px; background: var(--rule);
+  }
+  .step { position: relative; padding-left: 50px; margin-bottom: 20px; }
+  .step:last-child { margin-bottom: 0; }
+  .step-badge {
+    position: absolute; left: 0; top: 0; width: 36px; height: 36px; border-radius: 50%;
+    background: var(--paper-raised); border: 2px solid var(--brass); color: var(--brass-strong);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; font-size: 14px;
+    display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow);
+  }
+  .step h4 { font-size: 16px; font-weight: 600; margin: 0 0 4px; font-family: inherit; }
+  .step p { margin: 6px 0 0; font-size: 14.5px; }
+  .callout {
+    margin-top: 14px; border-radius: 10px; padding: 13px 16px; font-size: 14.5px;
+    display: flex; gap: 10px;
+  }
+  .callout .icon { flex: none; font-size: 15px; line-height: 1.5; }
+  .callout.note { background: var(--mono-chip-bg); color: var(--ink-soft); }
+  .callout.done { background: var(--teal-wash); color: var(--teal); }
+  .callout.gotcha { background: var(--rust-wash); color: var(--rust); }
+  .callout b { color: inherit; }
+  footer {
+    margin-top: 48px; padding-top: 22px; border-top: 1px solid var(--rule);
+    font-size: 13.5px; color: var(--ink-soft); display: flex; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap;
+  }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow"><span class="dot"></span>Exact mechanisms, not marketing claims</div>
+    <h1>Personal Vault — Security Deep Dive</h1>
+    <p class="sub">
+      What encrypts what, with which algorithm and key size; exactly why the publicly
+      hosted GitHub Pages share page and its Google Apps Script backend are safe despite
+      being visible to anyone; and a plain accounting of what this design does <i>not</i>
+      protect against.
+    </p>
+  </header>
+
+  <h2 class="section">1. Threat model</h2>
+  <div class="panel">
+    <div class="two-col">
+      <div class="col good">
+        <h4>✓ Defends against</h4>
+        <ul>
+          <li>Someone obtaining <code>vault.pvlt</code> (stolen laptop, compromised Drive
+            account) without the master secret</li>
+          <li>Someone obtaining a share link's Drive file id without also having the
+            URL's key fragment</li>
+          <li>Network eavesdropping on either the vault sync or a share (TLS end to end)</li>
+          <li>Undetected tampering with an encrypted file or a share blob (GCM
+            authentication tag)</li>
+          <li>A share link being read by more than one party (Apps Script trash +
+            <code>isTrashed()</code> check, under a script-wide lock)</li>
+        </ul>
+      </div>
+      <div class="col bad">
+        <h4>✕ Does not defend against</h4>
+        <ul>
+          <li>Someone who has your master secret</li>
+          <li>A memory-dump/debugger attack on a running, <i>unlocked</i> instance</li>
+          <li>A compromised Google account with Drive access already granted (the file
+            is still useless without the secret, but this is out of scope of the app
+            itself)</li>
+          <li>A compromised GitHub account (could tamper with the Pages site or the
+            Apps Script deployment)</li>
+          <li>A weak master secret that technically satisfies the length/character
+            rules (e.g. <code>Password123!</code>)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="section">2. Vault encryption, exactly</h2>
+  <div class="panel">
+    <h3>Algorithm</h3>
+    <p>
+      <b>AES-256-GCM</b> (Galois/Counter Mode) — an AEAD (authenticated encryption with
+      associated data) cipher. Unlike AES-CBC, which needs a separate MAC bolted on to
+      get integrity, GCM produces confidentiality <i>and</i> tamper-detection from one
+      pass.
+    </p>
+    <h3 style="margin-top:18px;">Key derivation</h3>
+    <p>
+      <b>PBKDF2-HMAC-SHA256</b>, <b>300,000 iterations</b>, a fresh random
+      <b>128-bit (16-byte) salt</b> generated on <i>every single save</i> — never
+      reused, even across saves of the same vault under the same secret. 300k
+      iterations sits well above common current baseline recommendations for
+      PBKDF2-SHA256, deliberately making a brute-force attempt against a stolen file
+      slow.
+    </p>
+    <h3 style="margin-top:18px;">Nonce &amp; tag</h3>
+    <p>
+      A fresh random <b>96-bit (12-byte) nonce</b> per encryption (the NIST-recommended
+      size for GCM), generated via a CSPRNG — nonce reuse under the same key would
+      catastrophically break both confidentiality and authentication, so a new one is
+      drawn every time, never derived from anything predictable. A <b>128-bit (16-byte)
+      authentication tag</b> means any single-bit change to the ciphertext, nonce, or
+      tag causes decryption to throw rather than silently return corrupted data.
+    </p>
+    <h3 style="margin-top:18px;">On-disk format</h3>
+    <div class="filelayout">"PVLT" (4 bytes) | version (1) | salt (16) | nonce (12) | tag (16) | ciphertext (rest)</div>
+    <p>Fixed-size header fields — no length-prefixing needed to parse it back apart.</p>
+    <div class="callout note">
+      <span class="icon">🔒</span>
+      <span>No custom or third-party crypto code: <code>AesGcm</code>/
+      <code>Rfc2898DeriveBytes</code> are .NET's own primitives, which call into
+      Windows' native CNG/BCrypt library underneath — this keeps the implementation
+      surface area to what Microsoft and the OS vendor maintain, not this project's own
+      cipher code.</span>
+    </div>
+  </div>
+
+  <h2 class="section">3. Share-link encryption, and how it differs</h2>
+  <div class="panel">
+    <p>
+      A share has no password of its own, so there's nothing to run PBKDF2 against.
+      Instead: a fresh <b>256-bit key straight from a CSPRNG</b>, used exactly once,
+      never written to disk, never logged, discarded the moment the link is built.
+      Same AES-256-GCM primitive, same 96-bit nonce / 128-bit tag sizing as the vault.
+    </p>
+    <h3 style="margin-top:18px;">On-disk format — deliberately different field order</h3>
+    <div class="filelayout">"PVSH" (4 bytes) | version (1) | nonce (12) | ciphertext (N) | tag (16)</div>
+    <p>
+      Ciphertext-then-tag here, versus tag-before-ciphertext in the vault format — not
+      an inconsistency, a requirement: the browser's <code>crypto.subtle.decrypt</code>
+      expects ciphertext and tag concatenated as one buffer in exactly that order, so
+      the viewer page can hand it the bytes as received with zero reassembly.
+    </p>
+    <h3 style="margin-top:18px;">Key transport: the URL fragment</h3>
+    <p>
+      The raw key is base64url-encoded into the link after a <code>#</code>. Fragments
+      are defined by the URL specification to never be sent by a browser to any server
+      — not in the request line, not in headers, not in <code>Referer</code>. Neither
+      GitHub Pages' CDN nor the Apps Script backend nor any network observer between
+      the recipient and either of them ever sees the key. This is the entire basis for
+      calling the decryption "client-side" / "zero-knowledge": literally nothing with
+      network visibility can derive it.
+    </p>
+  </div>
+
+  <h2 class="section">4. Why a fully public GitHub Pages page is safe</h2>
+  <div class="section-sub">Walking through every piece of information a random visitor can actually see, and why none of it is exploitable.</div>
+  <div class="steps">
+    <div class="step"><div class="step-badge">1</div>
+      <h4>The JS source is 100% public (view-source works)</h4>
+      <p>By design, nothing secret is embedded in it. An earlier version of this design
+      embedded a restricted Google API key directly in the page; the current design
+      removed that entirely in favor of the Apps Script backend, so there is now
+      <i>nothing at all</i> in the public page worth protecting. Knowing the exact
+      algorithm and blob layout (published above) gives an attacker nothing without a
+      key — this follows Kerckhoffs's principle: security must rest on the key, never
+      on the algorithm being secret.</p></div>
+    <div class="step"><div class="step-badge">2</div>
+      <h4>The Apps Script Web App URL is knowable too — and that's fine</h4>
+      <p>Calling it does nothing useful without a valid, not-yet-consumed Drive file
+      id. Knowing a file id <i>alone</i>, without the URL fragment's key, yields only
+      ciphertext.</p></div>
+    <div class="step"><div class="step-badge">3</div>
+      <h4>Drive file ids are not guessable</h4>
+      <p>Google-generated, long, high-entropy, not sequential, not derived from
+      anything public (account name, timestamp, etc). There is no practical way to
+      enumerate them.</p></div>
+    <div class="step"><div class="step-badge">4</div>
+      <h4>The Drive file itself is never publicly shared</h4>
+      <p><code>GoogleDriveSync.UploadShareAsync</code> grants no "anyone with the link"
+      permission at all. The Apps Script can read it purely because it runs
+      <b>"Execute as: Me"</b> — a privilege scoped to that deployed script's own
+      execution context, never exposed to whoever calls the Web App.</p></div>
+    <div class="step"><div class="step-badge">5</div>
+      <h4>Even the backend only ever sees ciphertext</h4>
+      <p><code>Code.gs</code> has no access to, and never receives, the decryption key
+      — it only reads and returns raw encrypted bytes. Even a tampered or malicious
+      deployment could at most exfiltrate ciphertext it already legitimately serves,
+      never plaintext, since decryption happens exclusively in the recipient's browser
+      afterward.</p></div>
+    <div class="step"><div class="step-badge">6</div>
+      <h4>First-read consumption is enforced, not assumed</h4>
+      <p><code>LockService.getScriptLock()</code> serializes every execution of the
+      <i>same deployed script</i> (script-wide, not just per-file), so two
+      near-simultaneous opens of one link cannot both read the file before either one
+      trashes it. <code>file.isTrashed()</code> is checked explicitly on every request,
+      because <code>DriveApp.getFileById()</code> does <i>not</i> throw for a trashed
+      file — skipping that check was a real bug caught and fixed during this project's
+      own testing.</p></div>
+    <div class="step"><div class="step-badge">7</div>
+      <h4>GitHub Pages itself runs no server-side code</h4>
+      <p>Pure static file hosting — it cannot be tricked into doing anything beyond
+      serving the same public HTML/JS to everyone, which is harmless by construction.</p></div>
+    <div class="step"><div class="step-badge">8</div>
+      <h4>Transport is TLS end to end</h4>
+      <p>Both <code>github.io</code> and <code>script.google.com</code> are served over
+      HTTPS — defense in depth on top of the fragment-never-transmitted property, not
+      the primary protection.</p></div>
+  </div>
+
+  <h2 class="section">5. Key management — where secrets actually live</h2>
+  <div class="panel">
+    <table>
+      <tr><th>Item</th><th>At rest?</th><th>Why safe (or not)</th></tr>
+      <tr><td>Master secret</td><td>Never</td><td>Only ever exists as an in-memory string while the vault is unlocked</td></tr>
+      <tr><td><code>vault.pvlt</code> / <code>payments.pvlt</code> / a share's Drive blob</td><td>Yes, always encrypted</td><td>AES-256-GCM ciphertext — "public" in the narrow sense that possession without the key is useless</td></tr>
+      <tr><td><code>drive-token\</code> (OAuth refresh token)</td><td>Yes, plaintext on disk</td><td><b>Genuinely sensitive</b> — a real bearer credential for Drive access (drive.file scope only) until revoked</td></tr>
+      <tr><td><code>credentials.json</code></td><td>Yes, plaintext</td><td>Identifies the <i>app</i>, not a user — Google documents installed-app client secrets as non-confidential by nature</td></tr>
+      <tr><td><code>settings.json</code> / <code>shares.json</code></td><td>Yes, plaintext</td><td>No secrets in either — bookkeeping only</td></tr>
+    </table>
+  </div>
+
+  <h2 class="section">6. In-memory hygiene, and its honest limit</h2>
+  <div class="panel">
+    <p>
+      <code>CryptographicOperations.ZeroMemory</code> is called on derived AES keys and
+      decrypted plaintext buffers immediately after use, throughout
+      <code>VaultCrypto</code>, <code>ShareCrypto</code>, and <code>VaultStorage</code>.
+    </p>
+    <div class="callout gotcha">
+      <span class="icon">⚠️</span>
+      <span><b>The master secret itself is a .NET <code>string</code></b> — immutable,
+      not zeroable, and the garbage collector does not scrub freed memory. A
+      memory-dump or debugger attack against a running, unlocked process is not
+      defended against by this design. Auto-lock (10 minutes idle by default) shrinks
+      the exposure window; it does not close it. This is a stated, deliberate
+      trade-off, not an oversight — hardening every in-memory secret against a
+      forensic memory dump would require a fundamentally different (and much more
+      invasive) approach than a normal desktop app typically takes.</span>
+    </div>
+  </div>
+
+  <h2 class="section">7. Known limitations, stated plainly</h2>
+  <div class="panel">
+    <ul>
+      <li>No protection against a compromised end-user machine while the vault is unlocked.</li>
+      <li>No password-reset or key-recovery path — deliberate: there is no backdoor to build
+        into a system that has none.</li>
+      <li><code>PasswordPolicy</code> enforces a floor (12 characters, upper/lower/symbol),
+        not real strength — it does not block predictable patterns.</li>
+      <li>The desktop app's "Shared Links..." list can lag reality (an opened link still
+        shows "Active" until the next expiry sweep) — a cosmetic gap, not a security one;
+        the link itself is genuinely dead the instant it's consumed.</li>
+      <li>Google/GitHub account compromise is out of this app's own threat model — protect
+        those accounts with their own strong authentication (2FA, etc).</li>
+    </ul>
+  </div>
+
+  <footer>
+    <span>Personal Vault — security deep dive</span>
+    <span>See PersonalVault-Architecture-Walkthrough.html for the full request flow</span>
+  </footer>
+
+</div>
