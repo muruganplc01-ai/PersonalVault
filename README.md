@@ -63,8 +63,10 @@ This is a working v2 - see "What's next" below for what's still just an idea.
   **Bank Accounts...** in the account editor to add Checking, Savings, Money Market, or
   however many separate accounts that institution has - each with its own account
   number, routing number, and balance. These ride along with the entry (encrypted,
-  synced, and included if you Share it) but stay separate from the entry's own single
-  Current Balance figure on the Overview tab.
+  synced, and included if you Share it). Once any sub-account has a balance set, the
+  Overview tab's "Total On Hand" uses the *sum* of them for that entry instead of its
+  own Current Balance field - so there's nothing to keep in sync by hand, just fill in
+  the sub-accounts and leave Current Balance blank.
 - **Search**: the account list has a live search box that matches across every field -
   name, institution, owner, username, notes, and any extra field - not just the ones
   shown as columns.

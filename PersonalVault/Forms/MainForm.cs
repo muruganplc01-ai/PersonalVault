@@ -366,7 +366,8 @@ public class MainForm : Form
             AutoSize = true,
             ForeColor = Color.DimGray,
             Padding = new Padding(8, 0, 8, 6),
-            Text = "\"On Hand\" totals every account with a Current balance entered (bank, investment, etc.). " +
+            Text = "\"On Hand\" totals every account with a Current balance entered (bank, investment, etc.), " +
+                   "or the sum of its Bank Accounts sub-accounts' balances if it has any. " +
                    "\"Dues\" totals every account with an Amount due entered (tuition/fees, a loan payoff, etc.). " +
                    "Set these from Account Details."
         };
@@ -522,32 +523,36 @@ public class MainForm : Form
     }
 
     /// <summary>
-    /// Rebuilds the Overview tab: every account with a Current balance entered, plus
-    /// the On Hand / Dues / Net totals. Called whenever accounts are added, edited,
-    /// deleted or imported, and whenever the vault data is reloaded.
+    /// Rebuilds the Overview tab: every account with a balance (its own Current Balance,
+    /// or - if it has any Bank Accounts sub-accounts with a balance set - the sum of
+    /// those instead, see EffectiveBalance), plus the On Hand / Dues / Net totals.
+    /// Called whenever accounts are added, edited, deleted or imported, and whenever
+    /// the vault data is reloaded.
     /// </summary>
     private void RefreshOverview()
     {
-        var withBalance = _vault.Accounts.Where(a => a.CurrentBalance.HasValue)
-            .OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
+        var withBalance = _vault.Accounts
+            .Select(a => new { Account = a, Balance = EffectiveBalance(a), AsOf = EffectiveBalanceAsOf(a) })
+            .Where(x => x.Balance.HasValue)
+            .OrderBy(x => x.Account.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         _balancesListView.BeginUpdate();
         _balancesListView.Items.Clear();
-        foreach (var account in withBalance)
+        foreach (var x in withBalance)
         {
-            var item = new ListViewItem(account.Category);
-            item.SubItems.Add(account.Name);
-            item.SubItems.Add(account.Institution);
-            item.SubItems.Add(account.Owner);
-            item.SubItems.Add(account.CurrentBalance!.Value.ToString("C"));
-            item.SubItems.Add(account.CurrentBalanceAsOf?.ToString("MMM d, yyyy") ?? "");
-            item.Tag = account;
+            var item = new ListViewItem(x.Account.Category);
+            item.SubItems.Add(x.Account.Name);
+            item.SubItems.Add(x.Account.Institution);
+            item.SubItems.Add(x.Account.Owner);
+            item.SubItems.Add(x.Balance!.Value.ToString("C"));
+            item.SubItems.Add(x.AsOf?.ToString("MMM d, yyyy") ?? "");
+            item.Tag = x.Account;
             _balancesListView.Items.Add(item);
         }
         _balancesListView.EndUpdate();
 
-        var totalOnHand = withBalance.Sum(a => a.CurrentBalance!.Value);
+        var totalOnHand = withBalance.Sum(x => x.Balance!.Value);
         var totalDues = _vault.Accounts.Where(a => a.AmountDue.HasValue).Sum(a => a.AmountDue!.Value);
         var net = totalOnHand - totalDues;
 
@@ -555,6 +560,31 @@ public class MainForm : Form
         _totalDuesLabel.Text = $"Total Dues: {totalDues:C}";
         _netLabel.Text = $"Net: {net:C}";
         _netLabel.ForeColor = net < 0 ? Color.Firebrick : Color.SeaGreen;
+    }
+
+    /// <summary>
+    /// An account's balance for the Overview tab: the sum of its Bank Accounts
+    /// sub-accounts' balances if any are set (see AccountEntry.SubAccounts), otherwise
+    /// its own Current Balance field. Sub-accounts take over rather than adding to
+    /// Current Balance once present, so the two never need to be kept in sync by hand -
+    /// enter balances on the sub-accounts and leave Current Balance blank, or use
+    /// Current Balance alone for anything without sub-accounts (every category besides
+    /// BankAccount, in practice).
+    /// </summary>
+    private static decimal? EffectiveBalance(AccountEntry account)
+    {
+        var subBalances = account.SubAccounts.Where(s => s.Balance.HasValue).Select(s => s.Balance!.Value).ToList();
+        return subBalances.Count > 0 ? subBalances.Sum() : account.CurrentBalance;
+    }
+
+    /// <summary>Companion to EffectiveBalance - the most recent sub-account "as of" date when sub-account balances are in play, otherwise the account's own CurrentBalanceAsOf.</summary>
+    private static DateTime? EffectiveBalanceAsOf(AccountEntry account)
+    {
+        var subDates = account.SubAccounts
+            .Where(s => s.Balance.HasValue && s.BalanceAsOf.HasValue)
+            .Select(s => s.BalanceAsOf!.Value)
+            .ToList();
+        return subDates.Count > 0 ? subDates.Max() : account.CurrentBalanceAsOf;
     }
 
     /// <summary>Double-click on the Overview tab's grid opens the same Account Details dialog as the Accounts tab.</summary>

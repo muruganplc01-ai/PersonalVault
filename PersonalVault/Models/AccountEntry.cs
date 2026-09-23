@@ -166,9 +166,11 @@ public class AccountEntry
     /// One bank can have several accounts (Checking, Savings, Money Market, ...) -
     /// this holds each one's own account/routing number and balance, edited via
     /// Account Details' "Bank Accounts..." button (BankAccount category only). Empty
-    /// for every other category and for older entries created before this existed.
-    /// Not currently rolled into CurrentBalance/the Overview tab's totals - those stay
-    /// a separate, manually-entered figure for this account as a whole.
+    /// for every other category and for older entries created before this existed. When
+    /// any sub-account here has a balance set, MainForm's Overview tab uses the sum of
+    /// them instead of this entry's own CurrentBalance (see MainForm.EffectiveBalance) -
+    /// so CurrentBalance stops mattering for an account once its sub-accounts are filled
+    /// in, rather than needing to be kept in sync with them by hand.
     /// </summary>
     public List<BankSubAccount> SubAccounts { get; set; } = new();
 
