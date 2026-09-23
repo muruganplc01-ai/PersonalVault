@@ -228,6 +228,15 @@ public class TrayApplicationContext : ApplicationContext
             PhoneNumber = account.PhoneNumber,
             Notes = account.Notes,
             ExtraFields = new Dictionary<string, string>(account.ExtraFields),
+            SubAccounts = account.SubAccounts.Select(sub => new BankSubAccount
+            {
+                Label = sub.Label,
+                AccountNumber = sub.AccountNumber,
+                RoutingNumber = sub.RoutingNumber,
+                Balance = sub.Balance,
+                BalanceAsOf = sub.BalanceAsOf,
+                Notes = sub.Notes
+            }).ToList(),
             ExpiresUtc = expiresUtc
         };
 

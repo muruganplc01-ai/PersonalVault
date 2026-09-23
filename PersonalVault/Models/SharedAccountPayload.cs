@@ -20,5 +20,9 @@ public class SharedAccountPayload
     public string PhoneNumber { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
     public Dictionary<string, string> ExtraFields { get; set; } = new();
+
+    /// <summary>Checking/Savings/Money Market etc. under this account (BankAccount category) - see AccountEntry.SubAccounts.</summary>
+    public List<BankSubAccount> SubAccounts { get; set; } = new();
+
     public DateTime ExpiresUtc { get; set; }
 }

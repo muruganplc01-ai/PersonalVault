@@ -59,6 +59,12 @@ This is a working v2 - see "What's next" below for what's still just an idea.
   policy/premium for insurance, lease dates for a rental) into the Extra Info box -
   just fill in the values. This is a convenience on top of the existing free-form
   key=value fields, not a new data format, so nothing about older entries changes.
+- **Multiple bank accounts under one entry**: for a `BankAccount`-category entry, click
+  **Bank Accounts...** in the account editor to add Checking, Savings, Money Market, or
+  however many separate accounts that institution has - each with its own account
+  number, routing number, and balance. These ride along with the entry (encrypted,
+  synced, and included if you Share it) but stay separate from the entry's own single
+  Current Balance figure on the Overview tab.
 - **Search**: the account list has a live search box that matches across every field -
   name, institution, owner, username, notes, and any extra field - not just the ones
   shown as columns.
@@ -113,6 +119,8 @@ PersonalVault/
   Forms/UnlockForm.cs         Enter/create the master secret
   Forms/MainForm.cs           Account list (search, add/edit/delete/copy, export/import, profile)
   Forms/AccountEditForm.cs    Add/edit a single account, incl. category-specific suggested fields
+  Forms/BankAccountsForm.cs   Checking/Savings/Money Market list for a BankAccount entry
+  Forms/BankSubAccountForm.cs Add/edit one bank sub-account
   Forms/ProfileForm.cs        Edit the vault owner's name/picture
   Forms/SettingsForm.cs       Edit AutoLockMinutes / reminder days / Start with Windows
   Forms/ChangeSecretForm.cs   Change the master secret

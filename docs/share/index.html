@@ -66,6 +66,17 @@
   .field {
     margin-bottom: 14px;
   }
+  .sub-account {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 14px 2px 14px;
+    margin-bottom: 14px;
+  }
+  .sub-account-heading {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
   .field-label {
     font-size: 12px;
     text-transform: uppercase;
@@ -242,8 +253,9 @@
     document.body.removeChild(ta);
   }
 
-  function addField(label, value, opts) {
+  function addField(label, value, opts, container) {
     opts = opts || {};
+    container = container || $("fields");
     if (!value) return;
 
     var field = document.createElement("div");
@@ -286,7 +298,39 @@
     row.appendChild(copyBtn);
 
     field.appendChild(row);
-    $("fields").appendChild(field);
+    container.appendChild(field);
+  }
+
+  function formatCurrency(amount) {
+    var n = Number(amount);
+    return isNaN(n) ? String(amount) : "$" + n.toFixed(2);
+  }
+
+  function addSubAccounts(subAccounts) {
+    if (!subAccounts || !subAccounts.length) return;
+
+    subAccounts.forEach(function (sub) {
+      var section = document.createElement("div");
+      section.className = "sub-account";
+
+      var heading = document.createElement("div");
+      heading.className = "sub-account-heading";
+      heading.textContent = sub.Label || "Account";
+      section.appendChild(heading);
+
+      $("fields").appendChild(section);
+
+      addField("Account Number", sub.AccountNumber, { monospace: true }, section);
+      addField("Routing Number", sub.RoutingNumber, { monospace: true }, section);
+
+      var balanceText = null;
+      if (sub.Balance !== null && sub.Balance !== undefined) {
+        balanceText = formatCurrency(sub.Balance);
+        if (sub.BalanceAsOf) balanceText += " (as of " + new Date(sub.BalanceAsOf).toLocaleDateString() + ")";
+      }
+      addField("Balance", balanceText, {}, section);
+      addField("Notes", sub.Notes, {}, section);
+    });
   }
 
   function render(payload) {
@@ -313,6 +357,8 @@
         addField(key, payload.ExtraFields[key]);
       });
     }
+
+    addSubAccounts(payload.SubAccounts);
 
     $("loading").classList.add("hidden");
     $("content").classList.remove("hidden");

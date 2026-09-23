@@ -62,6 +62,32 @@ public static class CategoryFieldSpec
 }
 
 /// <summary>
+/// One sub-account under a BankAccount-category AccountEntry - e.g. "Checking",
+/// "Savings", "Money Market" all under the same "Chase Bank" entry. Edited via Account
+/// Details' "Bank Accounts..." button (see Forms/BankAccountsForm.cs,
+/// Forms/BankSubAccountForm.cs), shown only for the BankAccount category. A plain data
+/// holder like every other model in this file - no behavior of its own.
+/// </summary>
+public class BankSubAccount
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    /// <summary>Free text, e.g. "Checking", "Savings", "Money Market" - not a fixed enum, same reasoning as AccountEntry.Category.</summary>
+    public string Label { get; set; } = string.Empty;
+
+    public string AccountNumber { get; set; } = string.Empty;
+    public string RoutingNumber { get; set; } = string.Empty;
+
+    /// <summary>Null means "not tracked", same 0-vs-not-entered distinction as AccountEntry.CurrentBalance.</summary>
+    public decimal? Balance { get; set; }
+
+    /// <summary>Only meaningful when Balance is set.</summary>
+    public DateTime? BalanceAsOf { get; set; }
+
+    public string Notes { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// A single stored account/credential record. Everything here is written to the
 /// encrypted vault file as-is (see Storage/VaultStorage.cs) - nothing in this class
 /// is persisted anywhere unencrypted.
@@ -135,6 +161,16 @@ public class AccountEntry
     /// e.g. "Policy Number=12345", "Routing Number=...", "Lease End=...".
     /// </summary>
     public Dictionary<string, string> ExtraFields { get; set; } = new();
+
+    /// <summary>
+    /// One bank can have several accounts (Checking, Savings, Money Market, ...) -
+    /// this holds each one's own account/routing number and balance, edited via
+    /// Account Details' "Bank Accounts..." button (BankAccount category only). Empty
+    /// for every other category and for older entries created before this existed.
+    /// Not currently rolled into CurrentBalance/the Overview tab's totals - those stay
+    /// a separate, manually-entered figure for this account as a whole.
+    /// </summary>
+    public List<BankSubAccount> SubAccounts { get; set; } = new();
 
     // --- Internal bookkeeping, not shown directly in the edit form ---
 

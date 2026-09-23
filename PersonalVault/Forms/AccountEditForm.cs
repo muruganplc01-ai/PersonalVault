@@ -18,12 +18,16 @@ public class AccountEditForm : Form
     private readonly Action<string, string[]>? _saveCustomCategoryFields;
 
     private const string CreditCardCategory = "CreditCard";
+    private const string BankAccountCategory = "BankAccount";
 
     private readonly ComboBox _categoryBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly Button _suggestFieldsButton = new() { Text = "+ Category Fields", AutoSize = true };
     private readonly Button _addCategoryButton = new() { Text = "+ New...", AutoSize = true };
     private readonly Label _cardDetailsLabel = new() { Text = "Card Details:", AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 6, 6, 0) };
     private readonly Button _cardDetailsButton = new() { Text = "Enter Card Details...", AutoSize = true };
+    private readonly Label _bankAccountsLabel = new() { Text = "Bank Accounts:", AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 6, 6, 0) };
+    private readonly Button _bankAccountsButton = new() { Text = "Checking, Savings, etc...", AutoSize = true };
+    private List<BankSubAccount> _workingSubAccounts = new();
     private readonly TextBox _nameBox = new() { Dock = DockStyle.Fill };
     private readonly TextBox _institutionBox = new() { Dock = DockStyle.Fill };
     private readonly TextBox _ownerBox = new() { Dock = DockStyle.Fill };
@@ -144,6 +148,13 @@ public class AccountEditForm : Form
         layout.Controls.Add(_cardDetailsButton, 1, row);
         row++;
 
+        // Only shown for the BankAccount category - see UpdateBankAccountsVisibility.
+        layout.RowCount = row + 1;
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.Controls.Add(_bankAccountsLabel, 0, row);
+        layout.Controls.Add(_bankAccountsButton, 1, row);
+        row++;
+
         var websitePanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoSize = true };
         websitePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         websitePanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -208,7 +219,12 @@ public class AccountEditForm : Form
         _suggestFieldsButton.Click += (_, _) => ApplySuggestedFields();
         _addCategoryButton.Click += (_, _) => AddNewCategory();
         _cardDetailsButton.Click += (_, _) => OpenCardDetails();
-        _categoryBox.SelectedIndexChanged += (_, _) => UpdateCardDetailsVisibility();
+        _bankAccountsButton.Click += (_, _) => OpenBankAccounts();
+        _categoryBox.SelectedIndexChanged += (_, _) =>
+        {
+            UpdateCardDetailsVisibility();
+            UpdateBankAccountsVisibility();
+        };
         _openWebsiteButton.Click += (_, _) => OpenWebsite();
         _hasAmountDueBox.CheckedChanged += (_, _) => _amountDueBox.Enabled = _hasAmountDueBox.Checked;
         _hasBalanceBox.CheckedChanged += (_, _) =>
@@ -254,6 +270,8 @@ public class AccountEditForm : Form
             .FirstOrDefault(c => string.Equals(c, _entry.Category, StringComparison.OrdinalIgnoreCase))
             ?? _categoryBox.Items[0];
         UpdateCardDetailsVisibility();
+        UpdateBankAccountsVisibility();
+        _workingSubAccounts = _entry.SubAccounts.Select(CloneSubAccount).ToList();
 
         _nameBox.Text = _entry.Name;
         _institutionBox.Text = _entry.Institution;
@@ -350,6 +368,8 @@ public class AccountEditForm : Form
             .Select(line => line.Split('=', 2))
             .Where(parts => parts.Length == 2 && !string.IsNullOrWhiteSpace(parts[0]))
             .ToDictionary(parts => parts[0].Trim(), parts => parts[1].Trim());
+
+        _entry.SubAccounts = _workingSubAccounts;
 
         DialogResult = DialogResult.OK;
     }
@@ -532,6 +552,37 @@ public class AccountEditForm : Form
         _cardDetailsLabel.Visible = isCreditCard;
         _cardDetailsButton.Visible = isCreditCard;
     }
+
+    /// <summary>Shows/hides the "Bank Accounts..." row based on the currently selected category - only relevant for BankAccount.</summary>
+    private void UpdateBankAccountsVisibility()
+    {
+        bool isBankAccount = string.Equals(_categoryBox.SelectedItem as string, BankAccountCategory, StringComparison.OrdinalIgnoreCase);
+        _bankAccountsLabel.Visible = isBankAccount;
+        _bankAccountsButton.Visible = isBankAccount;
+    }
+
+    /// <summary>
+    /// Opens the Checking/Savings/Money Market list (BankAccountsForm), operating on
+    /// _workingSubAccounts - a working copy so Cancel on this whole dialog discards any
+    /// sub-account edits too, same as every other field here. Only actually applied to
+    /// _entry in SaveButton_Click.
+    /// </summary>
+    private void OpenBankAccounts()
+    {
+        using var form = new BankAccountsForm(_workingSubAccounts);
+        form.ShowDialog(this);
+    }
+
+    private static BankSubAccount CloneSubAccount(BankSubAccount source) => new()
+    {
+        Id = source.Id,
+        Label = source.Label,
+        AccountNumber = source.AccountNumber,
+        RoutingNumber = source.RoutingNumber,
+        Balance = source.Balance,
+        BalanceAsOf = source.BalanceAsOf,
+        Notes = source.Notes
+    };
 
     /// <summary>
     /// Opens the structured Card Details popup (see cc.png-style Card
