@@ -403,24 +403,23 @@
       <span class="crumb">File Explorer</span>
       <h3>Place the file — this part is now automatic</h3>
       <p>
-        Rename the downloaded file to exactly <code>credentials.json</code>.
+        Rename the downloaded file to exactly <code>credentials.json</code>, then drop it
+        right next to <code>PersonalVault.exe</code> — that's the app's data folder by
+        default (a <code>PersonalVault</code> folder created there automatically), whether
+        you're running the portable build or one you built from source yourself.
       </p>
-      <ul>
-        <li>Running the portable app? Drop it right next to <code>PersonalVault.exe</code>.</li>
-        <li>Building from source? Put it at <code>%AppData%\PersonalVault\credentials.json</code>.</li>
-      </ul>
       <div class="callout note">
         <span class="icon">✨</span>
-        <span>Personal Vault now finds a <code>credentials.json</code> sitting next to its own
-        .exe and copies it into place for you on first launch — you don't have to go find
-        <code>%AppData%</code> yourself.</span>
+        <span>Personal Vault finds a <code>credentials.json</code> sitting next to its own
+        .exe and copies it into its data folder for you on first launch — nothing to go
+        find or type yourself.</span>
       </div>
       <div class="callout gotcha">
         <span class="icon">📁</span>
-        <span><b><code>%AppData%</code> is not <code>C:\Users\Default\AppData</code>.</b>
-        "Default" is a hidden Windows template folder, not your account. Type
-        <code>%AppData%\PersonalVault</code> literally into the address bar and Windows
-        resolves it to your own profile automatically.</span>
+        <span><b>Changed the data folder already?</b> If you've used Profile →
+        <b>Change Data Folder...</b> to move it somewhere else, put
+        <code>credentials.json</code> there instead — check Profile → <b>Data folder</b>
+        for the current location, or <b>Open Folder</b> to jump straight to it.</span>
       </div>
     </div>
 
@@ -463,19 +462,20 @@
     </div>
 
     <div class="qa">
-      <div class="q"><span class="mark">?</span> I can't find the AppData folder</div>
-      <div class="a"><code>%AppData%</code> only resolves correctly when typed into File
-      Explorer's address bar as literal text with the percent signs — it is not a real
-      folder called "AppData" you browse to by hand, and it is never under
-      <code>C:\Users\Default</code>.</div>
+      <div class="q"><span class="mark">?</span> Where's my data folder?</div>
+      <div class="a">By default, a <code>PersonalVault</code> folder created automatically
+      right next to <code>PersonalVault.exe</code> — fully portable, nothing under
+      <code>%AppData%</code>. Open Personal Vault → <b>Profile...</b> to see the exact
+      path (and an <b>Open Folder</b> button), or to move it elsewhere with
+      <b>Change Data Folder...</b>.</div>
     </div>
 
     <div class="qa">
       <div class="q"><span class="mark">?</span> Sign-in fails or the app says credentials are missing</div>
       <div class="a">Double-check: the OAuth client was created as <b>Desktop app</b>, not
       Web application; the downloaded file was renamed to exactly <code>credentials.json</code>
-      (not <code>client_secret_....json</code>); and it's sitting next to
-      <code>PersonalVault.exe</code> or in <code>%AppData%\PersonalVault\</code>.</div>
+      (not <code>client_secret_....json</code>); and it's sitting in the app's data folder —
+      see Profile → <b>Data folder</b> above if you're not sure where that is.</div>
     </div>
 
     <div class="qa">
