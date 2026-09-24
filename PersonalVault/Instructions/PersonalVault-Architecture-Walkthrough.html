@@ -253,6 +253,74 @@ docs/share/
 
   <h2 class="section">6. One-time Share Account: the complete request path</h2>
   <div class="section-sub">This is the part most worth understanding end to end before changing anything in it — a mistake here has real security consequences.</div>
+
+  <div class="panel" style="overflow-x:auto;">
+    <svg viewBox="0 0 800 460" role="img" aria-label="Sequence diagram of the share-link flow between the desktop app, Google Drive, Apps Script, and the recipient's browser" style="width:100%; height:auto; min-width:640px;">
+      <defs>
+        <marker id="seq-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-soft)"></path>
+        </marker>
+      </defs>
+
+      <!-- Lifelines -->
+      <g stroke="var(--rule)" stroke-width="1.5" stroke-dasharray="3,4">
+        <line x1="80"  y1="46" x2="80"  y2="430"></line>
+        <line x1="300" y1="46" x2="300" y2="430"></line>
+        <line x1="520" y1="46" x2="520" y2="430"></line>
+        <line x1="710" y1="46" x2="710" y2="430"></line>
+      </g>
+
+      <!-- Actor boxes -->
+      <g font-family="IBM Plex Mono, ui-monospace, monospace" font-size="12" font-weight="600" text-anchor="middle">
+        <rect x="15"  y="8" width="130" height="34" rx="8" fill="var(--brass-wash)" stroke="var(--brass)"></rect>
+        <text x="80" y="29" fill="var(--brass-strong)">Desktop App</text>
+
+        <rect x="235" y="8" width="130" height="34" rx="8" fill="var(--brass-wash)" stroke="var(--brass)"></rect>
+        <text x="300" y="29" fill="var(--brass-strong)">Google Drive</text>
+
+        <rect x="455" y="8" width="130" height="34" rx="8" fill="var(--brass-wash)" stroke="var(--brass)"></rect>
+        <text x="520" y="29" fill="var(--brass-strong)">Apps Script</text>
+
+        <rect x="638" y="8" width="144" height="34" rx="8" fill="var(--brass-wash)" stroke="var(--brass)"></rect>
+        <text x="710" y="29" fill="var(--brass-strong)">Recipient's Browser</text>
+      </g>
+
+      <!-- Step 1: Desktop App -> Google Drive -->
+      <line x1="80" y1="78" x2="300" y2="78" stroke="var(--ink-soft)" stroke-width="1.5" marker-end="url(#seq-arrow)"></line>
+      <text x="82" y="70" font-size="11.5" fill="var(--ink)">1. Upload encrypted blob as a PRIVATE file</text>
+
+      <!-- Step 2: Desktop App -> Browser (out of band) -->
+      <line x1="80" y1="140" x2="710" y2="140" stroke="var(--ink-soft)" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#seq-arrow)"></line>
+      <text x="82" y="118" font-size="11.5" fill="var(--ink)">2. Share link sent out-of-band (email, text, etc.)</text>
+      <text x="82" y="133" font-size="11.5" fill="var(--ink)">— file id + key, only in the URL's #fragment</text>
+
+      <!-- Step 3: Browser -> Apps Script -->
+      <line x1="710" y1="200" x2="520" y2="200" stroke="var(--ink-soft)" stroke-width="1.5" marker-end="url(#seq-arrow)"></line>
+      <text x="524" y="192" font-size="11.5" fill="var(--ink)">3. GET ?id=&lt;fileId&gt; — the key is NOT sent</text>
+
+      <!-- Step 4: Apps Script -> Google Drive -->
+      <line x1="520" y1="256" x2="300" y2="256" stroke="var(--ink-soft)" stroke-width="1.5" marker-end="url(#seq-arrow)"></line>
+      <text x="304" y="248" font-size="11.5" fill="var(--ink)">4. Read bytes, then trash the file (isTrashed check)</text>
+
+      <!-- Step 5: Apps Script -> Browser -->
+      <line x1="520" y1="312" x2="710" y2="312" stroke="var(--ink-soft)" stroke-width="1.5" marker-end="url(#seq-arrow)"></line>
+      <text x="524" y="304" font-size="11.5" fill="var(--ink)">5. Return ciphertext (or "GONE" if already used)</text>
+
+      <!-- Step 6: note over Browser -->
+      <rect x="560" y="345" width="220" height="60" rx="8" fill="var(--teal-wash)" stroke="var(--teal)"></rect>
+      <text x="570" y="362" font-size="11.5" fill="var(--teal)">6. Decrypted locally (Web Crypto)</text>
+      <text x="570" y="377" font-size="11.5" fill="var(--teal)">using the key from step 2 —</text>
+      <text x="570" y="392" font-size="11.5" fill="var(--teal)">no network call for this step</text>
+    </svg>
+    <p style="margin-top:10px; font-size:13px; color:var(--ink-soft);">
+      Solid arrows are network requests; every one of them carries a file id but
+      <b>never the decryption key</b>. The dashed arrow (step 2) isn't an API call at
+      all — it's just however you send the link (email, text, etc.); it's the only
+      place the key exists outside your own memory, and it lives only in the part of
+      the URL browsers never transmit.
+    </p>
+  </div>
+
   <div class="steps">
     <div class="step"><div class="step-badge">1</div>
       <h4>Create the link (desktop app)</h4>
