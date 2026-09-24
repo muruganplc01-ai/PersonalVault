@@ -133,6 +133,35 @@
     </p>
   </header>
 
+  <div class="panel">
+    <h3>Quick answers — read this first</h3>
+    <p><b>Where is the master password saved?</b> Nowhere. It is never written to disk,
+    never stored in the vault file, never logged anywhere. It exists only as a value
+    held in memory for as long as the vault stays unlocked, and is used to derive an
+    AES key via PBKDF2 every time the vault is saved (section 2) — the password itself
+    cannot be recovered from anything on disk, even the encrypted vault file.</p>
+    <p style="margin-top:12px;"><b>How is the vault (<code>vault.pvlt</code>) encrypted?</b>
+    AES-256-GCM, with the key derived from the master password via PBKDF2-HMAC-SHA256
+    (300,000 iterations, a fresh random salt on every save). Full detail in section 2.</p>
+    <p style="margin-top:12px;"><b>How does a one-time share link actually work?</b>
+    See section 4 for the full step-by-step flow. In short: a fresh random key encrypts
+    just that one account, the ciphertext goes to a Drive file that's never made public,
+    the link carries the file id and key only in the URL fragment (never sent to any
+    server), and a Google Apps Script deletes the file the instant it's first read.</p>
+    <p style="margin-top:12px;"><b>Is there anything dangerous in the public
+    <code>docs/share/index.html</code>?</b> No. The only "live" value in that file is
+    the Apps Script Web App URL — not a secret, since it can only trigger "serve once,
+    then delete" on a file id it doesn't already know. No API keys, no OAuth secrets,
+    no vault data live in that file. See section 5.</p>
+    <p style="margin-top:12px;"><b>Was anything sensitive ever committed to the public
+    GitHub repo?</b> Checked directly against the full git history:
+    <code>credentials.json</code>, <code>vault.pvlt</code>, <code>drive-token/</code>,
+    and <code>settings.json</code> have never been committed, at any point. One Google
+    API key was briefly committed during development and later replaced entirely by the
+    Apps Script design — see the audit note in section 5 for what was done about the
+    leftover copy in git history.</p>
+  </div>
+
   <h2 class="section">1. Threat model</h2>
   <div class="panel">
     <div class="two-col">
@@ -235,7 +264,65 @@
     </p>
   </div>
 
-  <h2 class="section">4. Why a fully public GitHub Pages page is safe</h2>
+  <h2 class="section">4. The complete share-link flow, step by step</h2>
+  <div class="section-sub">Everything that happens between clicking Share... and a recipient seeing the account, in order.</div>
+  <div class="steps">
+    <div class="step"><div class="step-badge">1</div>
+      <h4>Create the link (desktop app)</h4>
+      <p>You select an account → pick an expiration (1 hour to 7 days) → <b>Create
+      Link</b>. The app builds a small payload from just that one account (name,
+      username, password, extra fields, bank sub-accounts, the expiration time) —
+      nothing else in the vault is touched.</p></div>
+    <div class="step"><div class="step-badge">2</div>
+      <h4>A brand-new key, used once</h4>
+      <p>A fresh random 256-bit key is generated — unrelated to your master password,
+      never derived from anything, used only for this one share and then discarded
+      (see section 3 for why this is a different scheme from the vault's).</p></div>
+    <div class="step"><div class="step-badge">3</div>
+      <h4>Encrypt, then upload as a PRIVATE file</h4>
+      <p>AES-256-GCM encrypts the payload with that key. The ciphertext is uploaded to
+      your own Google Drive as a brand-new file with <b>no sharing permission granted
+      at all</b> — not even "anyone with the link." Nobody can read it directly, not
+      even you without your own Drive sign-in.</p></div>
+    <div class="step"><div class="step-badge">4</div>
+      <h4>Build the link</h4>
+      <p><code>https://&lt;you&gt;.github.io/PersonalVault/share/#id=&lt;fileId&gt;&amp;key=&lt;theKey&gt;&amp;exp=&lt;time&gt;</code>
+      — the file id and key sit after the <code>#</code>, a URL fragment. Browsers
+      never transmit anything after <code>#</code> to any server, so this key never
+      travels over the network at all, to anyone, at any point. The link is copied to
+      your clipboard.</p></div>
+    <div class="step"><div class="step-badge">5</div>
+      <h4>Recipient opens the link</h4>
+      <p>Their browser loads the static <code>index.html</code> page. Its JavaScript
+      reads the <code>id</code> and <code>key</code> straight out of the URL fragment,
+      locally — this never leaves their browser.</p></div>
+    <div class="step"><div class="step-badge">6</div>
+      <h4>The page asks Apps Script for the file — without the key</h4>
+      <p>The page calls your Google Apps Script Web App, passing only the file
+      <code>id</code>. The key is deliberately not sent in this request either — Apps
+      Script never sees it, ever.</p></div>
+    <div class="step"><div class="step-badge">7</div>
+      <h4>Apps Script serves it once, then destroys it</h4>
+      <p>Running under your own Google identity, the script finds the file, reads its
+      (still-encrypted) bytes, immediately trashes the file, and returns the bytes. If
+      the file is already gone (already opened once, expired, or revoked), it replies
+      <code>GONE</code> instead — see section 5, step 6 for exactly how "only once" is
+      enforced.</p></div>
+    <div class="step"><div class="step-badge">8</div>
+      <h4>Decrypt entirely inside the recipient's browser</h4>
+      <p>The page decrypts the returned bytes using the key it already had from step 5,
+      via the browser's built-in Web Crypto API (<code>crypto.subtle.decrypt</code>) —
+      nothing server-side ever performs or sees this decryption. The fields are
+      rendered with per-field copy buttons.</p></div>
+    <div class="step"><div class="step-badge">9</div>
+      <h4>Links nobody ever opens</h4>
+      <p>A timer in the desktop app (every 15 minutes) independently deletes any Drive
+      file whose expiration has passed and was never opened — a safety net for a link
+      that's simply forgotten about, on top of the immediate one-time consumption in
+      step 7.</p></div>
+  </div>
+
+  <h2 class="section">5. Why a fully public GitHub Pages page is safe</h2>
   <div class="section-sub">Walking through every piece of information a random visitor can actually see, and why none of it is exploitable.</div>
   <div class="steps">
     <div class="step"><div class="step-badge">1</div>
@@ -290,7 +377,18 @@
       the primary protection.</p></div>
   </div>
 
-  <h2 class="section">5. Key management — where secrets actually live</h2>
+  <div class="callout done">
+    <span class="icon">✓</span>
+    <span><b>Audited 2026-09-23:</b> confirmed the repo is public via the GitHub API,
+    and searched the <i>entire</i> git history for <code>credentials.json</code>,
+    <code>vault.pvlt</code>, <code>drive-token/</code>, and <code>settings.json</code> —
+    none has ever been committed, at any point. One Google Drive API key from an
+    earlier version of this design (before the Apps Script rework) was found still
+    present in an old commit even though the current code no longer uses it; it has
+    since been <b>revoked in Google Cloud Console</b>, closing that off completely.</span>
+  </div>
+
+  <h2 class="section">6. Key management — where secrets actually live</h2>
   <div class="panel">
     <table>
       <tr><th>Item</th><th>At rest?</th><th>Why safe (or not)</th></tr>
@@ -302,7 +400,7 @@
     </table>
   </div>
 
-  <h2 class="section">6. In-memory hygiene, and its honest limit</h2>
+  <h2 class="section">7. In-memory hygiene, and its honest limit</h2>
   <div class="panel">
     <p>
       <code>CryptographicOperations.ZeroMemory</code> is called on derived AES keys and
@@ -322,7 +420,7 @@
     </div>
   </div>
 
-  <h2 class="section">7. Known limitations, stated plainly</h2>
+  <h2 class="section">8. Known limitations, stated plainly</h2>
   <div class="panel">
     <ul>
       <li>No protection against a compromised end-user machine while the vault is unlocked.</li>
