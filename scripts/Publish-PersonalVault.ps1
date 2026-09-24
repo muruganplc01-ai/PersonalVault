@@ -1,51 +1,34 @@
 <#
 .SYNOPSIS
-  Builds a portable, self-contained copy of Personal Vault and zips it up, ready to
-  hand to another PC (yourself, disaster recovery, family/friend sharing) or to drop
-  into Google Drive manually.
+  Builds a portable, self-contained copy of Personal Vault and zips it up as one
+  file, ready to hand to someone who'll set everything up from scratch (their own
+  credentials.json, their own Drive account) - the friend-sharing model.
 
 .DESCRIPTION
-  1. Publishes a self-contained, single-file win-x64 build to a clean output folder.
-  2. Optionally copies your own credentials.json into that folder, so the zip is a
-     complete, ready-to-run package (see PersonalVault-Disaster-Recovery.html for why
-     that file is safe to bundle with your own copy).
-  3. Zips the whole publish folder into a dated .zip next to it.
+  1. Publishes a self-contained, single-file win-x64 build into PublishDir.
+  2. Zips the contents of PublishDir into one dated .zip, placed in that same
+     PublishDir - so everything this script produces lives in one place
+     (C:\Personal\publish by default) instead of spreading into C:\Personal itself.
 
-  This script does NOT upload anything anywhere - it stops once the zip exists. Copy
-  that zip into your Drive folder (or upload it at drive.google.com) yourself.
+  Deliberately does NOT include credentials.json - the recipient gets just the app
+  and follows PersonalVault-Drive-Setup-Guide.html themselves if they want Drive
+  backup. This script also does not upload anything; send the zip however you like.
 
 .PARAMETER ProjectPath
   Path to the .csproj to publish. Defaults to the PersonalVault project in this repo.
 
 .PARAMETER PublishDir
-  Where the published app is placed. Defaults to C:\Personal\publish.
-
-.PARAMETER OutputZipDir
-  Where the resulting .zip is written. Defaults to C:\Personal.
-
-.PARAMETER CredentialsJsonPath
-  Path to your own credentials.json to bundle into the zip. Defaults to
-  C:\Personal\PersonalVault\credentials.json (this project's default data folder,
-  since PersonalVault.csproj builds to C:\Personal). Pass -SkipCredentials to leave
-  it out entirely.
-
-.PARAMETER SkipCredentials
-  Don't bundle credentials.json even if found.
+  Where the published app AND the resulting zip both go. Defaults to
+  C:\Personal\publish.
 
 .EXAMPLE
   .\Publish-PersonalVault.ps1
-
-.EXAMPLE
-  .\Publish-PersonalVault.ps1 -SkipCredentials
 #>
 
 [CmdletBinding()]
 param(
     [string]$ProjectPath = (Join-Path $PSScriptRoot "..\PersonalVault\PersonalVault.csproj"),
-    [string]$PublishDir = "C:\Personal\publish",
-    [string]$OutputZipDir = "C:\Personal",
-    [string]$CredentialsJsonPath = "C:\Personal\PersonalVault\credentials.json",
-    [switch]$SkipCredentials
+    [string]$PublishDir = "C:\Personal\publish"
 )
 
 $ErrorActionPreference = "Stop"
@@ -78,17 +61,8 @@ if ($LASTEXITCODE -ne 0) {
     throw "dotnet publish failed with exit code $LASTEXITCODE"
 }
 
-if (-not $SkipCredentials) {
-    if (Test-Path $CredentialsJsonPath) {
-        Copy-Item $CredentialsJsonPath -Destination (Join-Path $PublishDir "credentials.json") -Force
-        Write-Host "Bundled credentials.json from $CredentialsJsonPath"
-    } else {
-        Write-Warning "credentials.json not found at $CredentialsJsonPath - zip will not include it. Pass -CredentialsJsonPath to point at the right file, or -SkipCredentials to silence this."
-    }
-}
-
 $timestamp = Get-Date -Format "yyyyMMdd-HHmm"
-$zipPath = Join-Path $OutputZipDir "PersonalVault-Publish-$timestamp.zip"
+$zipPath = Join-Path $PublishDir "PersonalVault-Publish-$timestamp.zip"
 
 if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
 
@@ -97,4 +71,4 @@ Compress-Archive -Path (Join-Path $PublishDir "*") -DestinationPath $zipPath
 
 Write-Host ""
 Write-Host "Done: $zipPath" -ForegroundColor Green
-Write-Host "Upload this zip to Google Drive (or wherever you keep it) manually - this script does not do that step."
+Write-Host "No credentials.json included - the recipient sets up their own via PersonalVault-Drive-Setup-Guide.html if they want Drive backup."
