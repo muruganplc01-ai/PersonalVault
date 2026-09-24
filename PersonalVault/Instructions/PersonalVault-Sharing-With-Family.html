@@ -305,6 +305,18 @@
     </div>
 
     <div class="qa">
+      <div class="q"><span class="mark">?</span> Will our vault files overwrite each other since we share credentials.json?</div>
+      <div class="a">No. Sharing <code>credentials.json</code> only identifies the app
+      to Google — it has no bearing on where anyone's data is stored. Each family member
+      signs in with their own separate Google account and gets their own separate
+      <code>vault.pvlt</code> file in their own separate Drive storage, so nobody's save
+      can ever touch anybody else's file. Overwriting only becomes a risk if two people
+      deliberately sign in with the <i>same</i> Google account on two different installs
+      to intentionally share one literal vault — that's a manual setup you'd have to go
+      out of your way to create, not something this guide sets up.</div>
+    </div>
+
+    <div class="qa">
       <div class="q"><span class="mark">?</span> A family member wasn't prompted to sign in to Drive</div>
       <div class="a">This only happens automatically on a genuinely first run with
       <code>credentials.json</code> already in place. If they skipped it, they can do it
