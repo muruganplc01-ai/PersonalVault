@@ -163,6 +163,15 @@
         </ul>
       </div>
     </div>
+    <div class="callout done">
+      <span class="icon">✓</span>
+      <span><b>credentials.json is safe to share within family</b> — it only
+      identifies the app to Google, never a credential to anyone's data. Each family
+      member's master secret is never stored anywhere (not on disk, not sent
+      anywhere) — it exists only in memory while their own vault is unlocked, and
+      their vault/Drive file stay entirely separate from yours. Full technical detail
+      in <code>PersonalVault-Security-Deep-Dive.html</code>, in this same folder.</span>
+    </div>
   </div>
 
   <div class="steps">
@@ -285,6 +294,14 @@
       <code>PersonalVault-Share-Setup-Guide.html</code> in this same folder. Each person
       who wants to use it needs their own GitHub Pages site and their own Apps Script
       deployment; it can't be shared the way <code>credentials.json</code> can.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="mark">?</span> Is it really safe to hand out credentials.json?</div>
+      <div class="a">Yes — see <code>PersonalVault-Security-Deep-Dive.html</code> in
+      this same folder for the full technical explanation, including exactly where
+      the master password lives, how the vault file is encrypted, and (if anyone uses
+      it) how the one-time share-link feature works end to end.</div>
     </div>
   </div>
 
