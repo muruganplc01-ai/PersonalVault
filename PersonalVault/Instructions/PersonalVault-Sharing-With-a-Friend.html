@@ -402,6 +402,27 @@
       </p>
     </div>
 
+    <div class="step">
+      <div class="step-badge">6</div>
+      <span class="crumb">Optional</span>
+      <h3>Two-factor authentication — pick the authenticator app, not email</h3>
+      <p>
+        Also entirely self-service, in <b>Profile → Two-Factor Authentication...</b>.
+        If they want a second factor on top of their master secret, recommend the
+        <b>authenticator app (TOTP)</b> option over email — it works completely
+        offline, since codes generate locally on their phone. The email option needs an
+        active internet connection and a signed-in Google Drive/Gmail session just to
+        unlock the local vault, which defeats the point of a vault that otherwise works
+        fully offline.
+      </p>
+      <div class="callout note">
+        <span class="icon">💡</span>
+        <span>TOTP setup shows 10 backup codes once — save those somewhere safe, since
+        they're the recovery path if the phone with the authenticator app is lost.
+        Full reasoning in <code>PersonalVault-Security-Deep-Dive.html</code>, Section 8.</span>
+      </div>
+    </div>
+
   </div>
 
   <div class="links">

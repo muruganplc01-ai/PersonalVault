@@ -211,6 +211,8 @@ docs/share/
       <tr><td><code>settings.json</code></td><td>Non-secret prefs, cached Drive file ids, GitHub username</td><td>Low</td></tr>
       <tr><td><code>shares.json</code></td><td>Active share bookkeeping (Drive file id, expiry, revoked flag) — <i>not</i> the decryption key</td><td>Low</td></tr>
       <tr><td>Master secret</td><td>Never written anywhere</td><td>Exists only as an in-memory string while the vault is unlocked</td></tr>
+      <tr><td><code>mfa-totp.dat</code></td><td>Raw TOTP secret, DPAPI-protected (<code>CurrentUser</code> scope)</td><td><b>Deliberately outside the vault</b> — per-machine/per-Windows-account, so decrypting <code>vault.pvlt</code> with the master secret alone can't yield a valid code</td></tr>
+      <tr><td>MFA backup code hashes</td><td>Inside <code>VaultProfile</code>, so inside <code>vault.pvlt</code>'s ciphertext</td><td>SHA-256 hex hashes only — never the raw codes; each is removed the moment it's used</td></tr>
       <tr><td><code>HKCU\Software\PersonalVault\DataFolder</code></td><td>A custom data-folder path, if "Change Data Folder..." was used</td><td>Not sensitive — just a path</td></tr>
     </table>
     <div class="callout note">
@@ -384,7 +386,55 @@ docs/share/
     only, the link itself is genuinely dead the instant it's consumed.</span>
   </div>
 
-  <h2 class="section">7. Build &amp; deploy</h2>
+  <h2 class="section">7. Two-factor authentication: the second gate</h2>
+  <div class="section-sub">Optional per-profile, chosen in <code>ProfileForm</code> → <code>MfaSetupForm</code>. The one design constraint that shapes all of it: decrypting <code>vault.pvlt</code> with the master secret alone must never be enough to also produce a valid second-factor code.</div>
+  <div class="panel">
+    <div class="steps">
+      <div class="step"><div class="step-badge">1</div>
+        <h4>Decrypt succeeds, but the vault isn't "unlocked" yet</h4>
+        <p><code>UnlockVault</code>, <code>RestoreVaultFromBytes</code>, and
+        <code>EnsureUnlocked</code> in <code>TrayApplicationContext.cs</code> all decrypt
+        into an in-memory <code>VaultData</code> as before, then call
+        <code>VerifyMfaAsync()</code> before returning success. If
+        <code>VaultProfile.MfaMethod</code> is <code>None</code>, this is a no-op and
+        behavior is unchanged from before MFA existed.</p></div>
+      <div class="step"><div class="step-badge">2</div>
+        <h4>TOTP path</h4>
+        <p><code>MfaVerifyForm</code> prompts for a 6-digit code.
+        <code>Security/TotpGenerator.cs</code> (RFC 6238, HMAC-SHA1, 30s step) checks it
+        against the raw secret loaded from <code>mfa-totp.dat</code> via
+        <code>Storage/MfaSecretStorage.cs</code> — a DPAPI-protected file that lives
+        outside <code>vault.pvlt</code> entirely, tied to this Windows account on this
+        machine. A backup code (checked by hash against
+        <code>VaultProfile.MfaBackupCodeHashes</code>) is accepted instead, and is
+        removed from the list on use.</p></div>
+      <div class="step"><div class="step-badge">3</div>
+        <h4>Email path</h4>
+        <p><code>SendMfaEmailCodeAsync</code> calls <code>GoogleDriveSync.SignInAsync</code>
+        with <code>includeGmailSendScope: true</code> (requesting Gmail's send-only
+        scope only at this point, not for every Drive sign-in), generates a random
+        6-digit code held in memory only, and sends it via
+        <code>Storage/GmailSender.cs</code> to <code>VaultProfile.MfaEmailAddress</code>.
+        No shared secret exists for this method — it's a fresh code every attempt.</p></div>
+      <div class="step"><div class="step-badge">4</div>
+        <h4>Any failure clears the decrypted vault from memory</h4>
+        <p>A wrong code, cancel, or exhausted retries makes <code>VerifyMfaAsync()</code>
+        return false; the caller clears <code>_vault</code>/<code>_secret</code>
+        immediately and loops back to the unlock prompt — a decrypted vault is never
+        left sitting in memory behind a failed second factor.</p></div>
+    </div>
+    <div class="callout note">
+      <span class="icon">🔑</span>
+      <span>Consequence of the per-machine TOTP secret: it does not travel with a Drive
+      restore to a new PC — the authenticator app entry has to be re-added there. That's
+      exactly what the backup codes are for, since their hashes live inside
+      <code>VaultProfile</code> and do travel with the vault. Full rationale for why this
+      split makes TOTP a real second factor (not just an extra UI click) is in
+      <code>PersonalVault-Security-Deep-Dive.html</code>, Section 8.</span>
+    </div>
+  </div>
+
+  <h2 class="section">8. Build &amp; deploy</h2>
   <div class="panel">
     <table>
       <tr><th>What</th><th>How</th></tr>
@@ -401,13 +451,16 @@ docs/share/
     </div>
   </div>
 
-  <h2 class="section">8. "Where do I change…" quick reference</h2>
+  <h2 class="section">9. "Where do I change…" quick reference</h2>
   <div class="panel">
     <table>
       <tr><th>Want to change…</th><th>Look at</th></tr>
       <tr><td>Vault encryption scheme</td><td><code>Security/VaultCrypto.cs</code></td></tr>
       <tr><td>Share-link encryption scheme</td><td><code>Security/ShareCrypto.cs</code></td></tr>
       <tr><td>Master password policy</td><td><code>Security/PasswordPolicy.cs</code></td></tr>
+      <tr><td>TOTP generation/validation</td><td><code>Security/TotpGenerator.cs</code>, <code>Security/Base32.cs</code></td></tr>
+      <tr><td>Where the TOTP secret or MFA setup/verify UI lives</td><td><code>Storage/MfaSecretStorage.cs</code>, <code>Forms/MfaSetupForm.cs</code>, <code>Forms/MfaVerifyForm.cs</code></td></tr>
+      <tr><td>Email MFA sending</td><td><code>Storage/GmailSender.cs</code></td></tr>
       <tr><td>Drive upload/download/permissions</td><td><code>Storage/GoogleDriveSync.cs</code></td></tr>
       <tr><td>Where files live on disk, or the override mechanism</td><td><code>Storage/AppPaths.cs</code>, <code>Utils/DataFolderLocation.cs</code>, <code>Utils/DataFolderMover.cs</code></td></tr>
       <tr><td>Share-link expiry sweep</td><td><code>Services/ShareExpiryService.cs</code></td></tr>

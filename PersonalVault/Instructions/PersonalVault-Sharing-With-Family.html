@@ -252,6 +252,46 @@
 
   </div>
 
+  <div class="panel">
+    <h2>Optional: two-factor authentication — which one for family?</h2>
+    <p>
+      Nothing above requires this — it's a separate, per-person choice each family
+      member makes for themselves in their own <b>Profile → Two-Factor
+      Authentication...</b>, unrelated to the shared <code>credentials.json</code>.
+      If a family member does want a second factor, recommend the authenticator app
+      over email:
+    </p>
+    <div class="send-grid">
+      <div class="send-col yes">
+        <h3>✓ Recommended: Authenticator app (TOTP)</h3>
+        <ul>
+          <li>Works completely offline — no internet, no Google sign-in needed to
+            unlock the vault</li>
+          <li>Codes generate locally on their phone, every 30 seconds</li>
+          <li>10 backup codes are shown once at setup — travel with the vault for
+            recovery on a new PC</li>
+        </ul>
+      </div>
+      <div class="send-col no">
+        <h3>✕ Not recommended here: Email code</h3>
+        <ul>
+          <li>Requires an active internet connection <i>and</i> a signed-in Google
+            Drive/Gmail session just to unlock the <b>local</b> vault</li>
+          <li>Defeats the point of a vault that otherwise works fully offline</li>
+          <li>No backup codes — recovery depends entirely on regaining email access</li>
+        </ul>
+      </div>
+    </div>
+    <div class="callout note">
+      <span class="icon">💡</span>
+      <span>Family members who travel, lose signal, or just want the vault to open
+      instantly without waiting on Google should pick <b>Authenticator app</b> every
+      time. Full technical reasoning — why TOTP is a real second factor and not just a
+      UI toggle — is in <code>PersonalVault-Security-Deep-Dive.html</code>, Section 8,
+      in this same folder.</span>
+    </div>
+  </div>
+
   <div class="trouble">
     <h2>Notes and troubleshooting</h2>
     <div class="sub">The things that actually come up sharing this within a family.</div>

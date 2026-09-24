@@ -50,7 +50,10 @@ This is a working v2 - see "What's next" below for what's still just an idea.
   them) and travel with the vault for exactly this reason: the authenticator secret
   itself doesn't survive a move to a new PC, but a backup code does. Email codes instead
   require Drive to be connected with Gmail's send-only scope granted (existing
-  Drive-connected accounts get prompted once to add it).
+  Drive-connected accounts get prompted once to add it). **Prefer TOTP over Email** if
+  the vault needs to stay usable offline: Email MFA needs an active internet connection
+  and a signed-in Drive/Gmail session just to unlock the local vault, while TOTP codes
+  generate locally with no connectivity at all.
 - **Credit card details**: for a `CreditCard`-category entry, click **Card
   Details...** in the account editor for a structured popup (card number formatted as
   you type, expiration month/year dropdowns, security code, cardholder name) instead of

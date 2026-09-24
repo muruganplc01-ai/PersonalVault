@@ -479,6 +479,17 @@
     </div>
 
     <div class="qa">
+      <div class="q"><span class="mark">?</span> It's asking me to re-authorize / a new consent screen with more permissions appears</div>
+      <div class="a">Only happens if you turn on <b>Email</b> two-factor authentication
+      (Profile → <b>Two-Factor Authentication...</b>) — that method needs to send mail
+      through your Google account, so it requests Gmail's send-only scope the first time
+      you enable it, on top of the Drive scope this guide sets up. Nothing else in the
+      app ever asks for more than Drive. If you'd rather not see that extra prompt at
+      all, choose the <b>Authenticator app (TOTP)</b> method instead — it needs no
+      additional Google permission and works fully offline.</div>
+    </div>
+
+    <div class="qa">
       <div class="q"><span class="mark">?</span> Can I delete this later?</div>
       <div class="a">Yes — it's entirely your own project. Delete or disable it anytime from
       <a href="https://console.cloud.google.com" style="color:inherit">console.cloud.google.com</a>
