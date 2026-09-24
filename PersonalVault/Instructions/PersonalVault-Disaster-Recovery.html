@@ -1,0 +1,321 @@
+<title>Personal Vault Disaster Recovery</title>
+<style>
+  :root {
+    --paper: #f7f4ee;
+    --paper-raised: #ffffff;
+    --ink: #1e2430;
+    --ink-soft: #5b6472;
+    --rule: #ddd6c7;
+    --brass: #93672c;
+    --brass-strong: #7a5322;
+    --brass-wash: #f0e4cd;
+    --teal: #2f6b4f;
+    --teal-wash: #e3efe7;
+    --rust: #a34a24;
+    --rust-wash: #f6e6dc;
+    --mono-chip-bg: #eee9dc;
+    --mono-chip-ink: #4a4335;
+    --shadow: 0 1px 2px rgba(30,36,48,0.06), 0 8px 24px rgba(30,36,48,0.06);
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --paper: #14171d; --paper-raised: #1c212a; --ink: #ece8de; --ink-soft: #a1a7b3;
+      --rule: #333a46; --brass: #cf9f54; --brass-strong: #e2b46e; --brass-wash: #2c2418;
+      --teal: #7cc9a3; --teal-wash: #16261e; --rust: #e2895d; --rust-wash: #2c1c14;
+      --mono-chip-bg: #262b34; --mono-chip-ink: #cfd3da;
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #14171d; --paper-raised: #1c212a; --ink: #ece8de; --ink-soft: #a1a7b3;
+    --rule: #333a46; --brass: #cf9f54; --brass-strong: #e2b46e; --brass-wash: #2c2418;
+    --teal: #7cc9a3; --teal-wash: #16261e; --rust: #e2895d; --rust-wash: #2c1c14;
+    --mono-chip-bg: #262b34; --mono-chip-ink: #cfd3da;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    font-size: 16px; line-height: 1.6;
+    padding-inline: 20px; padding-block: 48px 96px;
+  }
+  h1, h2, h3, h4 { font-family: "Fraunces", Georgia, serif; text-wrap: balance; margin: 0; }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--brass-strong); background: var(--brass-wash);
+    border-radius: 999px; padding: 5px 12px 5px 10px; margin-bottom: 22px;
+  }
+  .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--brass); }
+  header h1 { font-size: clamp(30px, 5vw, 42px); font-weight: 600; line-height: 1.08; letter-spacing: -0.01em; }
+  header .sub { margin-top: 14px; font-size: 17px; color: var(--ink-soft); max-width: 58ch; }
+  .panel {
+    background: var(--paper-raised); border: 1px solid var(--rule); border-radius: 14px;
+    box-shadow: var(--shadow); padding: 22px 24px; margin-top: 28px;
+  }
+  .panel h2 {
+    font-size: 15px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--brass-strong); margin-bottom: 10px;
+  }
+  .send-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
+  .send-col h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; font-family: "Source Sans 3", sans-serif; }
+  .send-col.yes h3 { color: var(--teal); }
+  .send-col.no h3 { color: var(--rust); }
+  .send-col ul { margin: 0; padding-left: 20px; }
+  .send-col li { margin-bottom: 6px; font-size: 14.5px; }
+  @media (max-width: 520px) { .send-grid { grid-template-columns: 1fr; } }
+  .steps { margin-top: 40px; position: relative; }
+  .steps::before {
+    content: ""; position: absolute; left: 21px; top: 8px; bottom: 8px;
+    width: 2px; background: var(--rule);
+  }
+  .step { position: relative; padding-left: 60px; margin-bottom: 34px; }
+  .step:last-child { margin-bottom: 0; }
+  .step-badge {
+    position: absolute; left: 0; top: 0; width: 44px; height: 44px; border-radius: 50%;
+    background: var(--paper-raised); border: 2px solid var(--brass); color: var(--brass-strong);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; font-size: 16px;
+    display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow);
+  }
+  .step h3 { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+  .crumb {
+    display: inline-flex; align-items: center; font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12.5px; color: var(--mono-chip-ink); background: var(--mono-chip-bg);
+    border-radius: 6px; padding: 4px 9px; margin-bottom: 12px;
+  }
+  .step p { margin: 10px 0 0; }
+  .step ul, .step ol { margin: 10px 0 0; padding-left: 22px; }
+  .step li { margin-bottom: 6px; }
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.92em;
+    background: var(--mono-chip-bg); color: var(--mono-chip-ink);
+    padding: 0.1em 0.4em; border-radius: 4px;
+  }
+  pre {
+    background: var(--mono-chip-bg); color: var(--mono-chip-ink); padding: 12px 14px;
+    border-radius: 8px; overflow-x: auto; font-size: 13px; margin-top: 10px;
+  }
+  pre code { background: none; padding: 0; }
+  .callout {
+    margin-top: 14px; border-radius: 10px; padding: 13px 16px; font-size: 14.5px;
+    display: flex; gap: 10px;
+  }
+  .callout .icon { flex: none; font-size: 15px; line-height: 1.5; }
+  .callout.gotcha { background: var(--rust-wash); color: var(--rust); }
+  .callout.gotcha strong { color: var(--rust); }
+  .callout.note { background: var(--mono-chip-bg); color: var(--ink-soft); }
+  .callout.done { background: var(--teal-wash); color: var(--teal); }
+  .callout p, .callout span { margin: 0; }
+  .callout b { color: inherit; }
+  .trouble { margin-top: 44px; }
+  .trouble h2 { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
+  .trouble .sub { color: var(--ink-soft); margin-bottom: 20px; font-size: 14.5px; }
+  .qa {
+    background: var(--paper-raised); border: 1px solid var(--rule); border-radius: 12px;
+    padding: 16px 18px; margin-bottom: 12px; box-shadow: var(--shadow);
+  }
+  .qa .q { font-weight: 600; font-size: 15px; display: flex; gap: 8px; }
+  .qa .q .mark { color: var(--rust); font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  .qa .a { margin-top: 6px; font-size: 14.5px; color: var(--ink-soft); }
+  .qa .a code { font-size: 0.9em; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { color: var(--ink-soft); font-weight: 600; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+  td code { font-size: 0.88em; }
+  footer {
+    margin-top: 48px; padding-top: 22px; border-top: 1px solid var(--rule);
+    font-size: 13.5px; color: var(--ink-soft); display: flex; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap;
+  }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow"><span class="dot"></span>Same person, same account, a different PC</div>
+    <h1>Disaster recovery &amp; accessing your vault from another computer</h1>
+    <p class="sub">
+      What to do if this PC dies, gets reimaged, or you simply want your vault on a
+      second machine — a laptop and a desktop, for example. This is <i>not</i> the
+      family/friend sharing flow — it's you, the same Google account, the same master
+      secret, on a different piece of hardware.
+    </p>
+  </header>
+
+  <div class="panel">
+    <h2>The one thing that makes this possible</h2>
+    <p style="margin:0;">
+      <b>Google Drive sync is your backup.</b> Every save uploads the encrypted
+      <code>vault.pvlt</code> to your own Drive, and Drive keeps the last 5 revisions as
+      a rolling history on top of that. If Drive sync was never turned on for this vault,
+      there is nothing to recover — the vault only ever existed on the one machine that
+      held it, and losing that machine means losing the vault, by design (there is no
+      other backend, no password reset, no company that holds a copy).
+    </p>
+    <div class="callout note">
+      <span class="icon">💡</span>
+      <span>If you haven't connected Drive yet, do it now, before you need it —
+      <b>Sign in to Google Drive</b> from the tray menu, or see
+      <code>PersonalVault-Drive-Setup-Guide.html</code> in this same folder.</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>What you need before you start</h2>
+    <ul style="margin:0; padding-left:20px;">
+      <li>Your <b>master secret</b> — there is no reset, so this only works if you still know it</li>
+      <li>The <b>same Google account</b> you originally connected Drive with</li>
+      <li>A copy of <code>credentials.json</code> (the same one this app already uses — see the note in step 2)</li>
+      <li>If two-factor authentication is on: either your phone with the authenticator app,
+        <i>or</i> one of your 10 backup codes (see step 5)</li>
+    </ul>
+  </div>
+
+  <div class="steps">
+
+    <div class="step">
+      <div class="step-badge">1</div>
+      <span class="crumb">New / other PC</span>
+      <h3>Get the app onto the other machine</h3>
+      <p>
+        Either build a fresh portable copy there (see the publish script below) or copy
+        over a <code>publish\</code> folder you already built. No install, no admin
+        rights — just an .exe.
+      </p>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">2</div>
+      <span class="crumb">Same folder as PersonalVault.exe</span>
+      <h3>Bring your credentials.json along</h3>
+      <p>
+        Copy your existing <code>credentials.json</code> into the same folder as the
+        .exe (or straight into the app's data folder). This is your own copy of the same
+        file already sitting on your original machine — it identifies the app to Google,
+        not you, so there's nothing new to create.
+      </p>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">3</div>
+      <span class="crumb">The Google sign-in prompt</span>
+      <h3>Sign in with the same Google account</h3>
+      <p>
+        Launch the app and click <b>Yes</b> when asked to connect Google Drive. It has to
+        be the <i>same</i> account as before — the app can only see files it created
+        itself (Drive's narrow <code>drive.file</code> scope), so a different account
+        won't find anything.
+      </p>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">4</div>
+      <span class="crumb">Automatic</span>
+      <h3>Restore prompt appears — enter your existing master secret</h3>
+      <p>
+        Because this PC has no local vault yet, the app finds the one on Drive and asks:
+        <i>"Restore it here? You'll need the master secret it was created with."</i> Enter
+        your <b>existing</b> master secret (not a new one) and the vault decrypts, saves a
+        local copy on this PC, and you're in.
+      </p>
+      <div class="callout gotcha">
+        <span class="icon">⚠️</span>
+        <span><b>Wrong secret just shows "Incorrect secret" and lets you retry</b> —
+        there's no lockout counter, but also no hint and no reset. If you're genuinely
+        not sure of it, stop and think before guessing repeatedly.</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">5</div>
+      <span class="crumb">Only if two-factor authentication is on</span>
+      <h3>Second factor: use a backup code, then re-set-up TOTP here</h3>
+      <p>
+        The authenticator app secret (TOTP) is deliberately stored per-machine and does
+        <b>not</b> travel with the vault — this new PC won't recognize your phone's
+        6-digit code yet. The app will say <i>"No authenticator is set up on this PC —
+        use a backup code instead."</i>
+      </p>
+      <ol>
+        <li>Enter one of the 10 backup codes you saved when you first turned TOTP on.
+          It's consumed immediately (one-time use).</li>
+        <li>Once unlocked, go to <b>Profile → Two-Factor Authentication...</b> and set up
+          TOTP fresh on this machine — a new secret, scanned/typed into your authenticator
+          app again, confirmed with a live code.</li>
+      </ol>
+      <div class="callout note">
+        <span class="icon">✉️</span>
+        <span><b>Email MFA has no such step</b> — it emails a fresh code on every unlock
+        attempt regardless of which machine you're on, so it works immediately here with
+        nothing extra to configure.</span>
+      </div>
+      <div class="callout gotcha">
+        <span class="icon">🔒</span>
+        <span><b>Out of backup codes and no access to the authenticator app that
+        generated them?</b> There is no other way in — same as forgetting the master
+        secret, this is intentional. Keep the backup codes somewhere durable (not only on
+        the phone that also runs the authenticator app).</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="panel">
+    <h2>Using two machines at once, going forward</h2>
+    <p style="margin:0;">
+      Nothing stops you from keeping the app installed on both a desktop and a laptop
+      permanently, both signed into the same account, both using the same master secret —
+      that's exactly what this guide sets up. The one thing to know: there's no real-time
+      merge between them. If you edit on both at close to the same time and both save,
+      whichever save reaches Drive last wins — Drive's 5-revision history is your safety
+      net if that ever clobbers something, but it isn't automatic conflict resolution.
+      In practice, just treat "the one you have open right now" as the active copy.
+    </p>
+  </div>
+
+  <div class="trouble">
+    <h2>Notes and troubleshooting</h2>
+    <div class="sub">The things that actually come up doing this.</div>
+
+    <div class="qa">
+      <div class="q"><span class="mark">?</span> I don't remember which Google account I used</div>
+      <div class="a">Check <a href="https://drive.google.com" style="color:inherit">drive.google.com</a>
+      on each Google account you might have used and look for a file named
+      <code>PersonalVaultData.pvlt</code> — that's the one.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="mark">?</span> I never turned on Drive sync — is there any other backup?</div>
+      <div class="a">No. There is no cloud service, no account recovery, and no company
+      holding a spare copy — that's the same zero-knowledge design that keeps your data
+      private in the first place. Local-only vaults exist solely on the machine holding
+      them.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="mark">?</span> The app didn't offer to restore — it just started with an empty vault</div>
+      <div class="a">Make sure you actually signed in with the account that has the Drive
+      file, and that you're not still on an old cached sign-in for a different account.
+      Sign out via the tray menu and sign in again with the right one if unsure.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="mark">?</span> Do I need a new credentials.json for the new PC?</div>
+      <div class="a">No — reuse the exact same one. It identifies the app to Google
+      (the OAuth client), not this specific installation.</div>
+    </div>
+
+  </div>
+
+  <footer>
+    <span>Personal Vault — disaster recovery &amp; multi-computer access</span>
+    <span>See PersonalVault-Security-Deep-Dive.html for why the design has no backdoor recovery</span>
+  </footer>
+
+</div>
