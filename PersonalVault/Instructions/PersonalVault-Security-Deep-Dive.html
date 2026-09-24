@@ -160,6 +160,10 @@
     API key was briefly committed during development and later replaced entirely by the
     Apps Script design — see the audit note in section 5 for what was done about the
     leftover copy in git history.</p>
+    <p style="margin-top:12px;"><b>Is two-factor authentication a real second factor, or just an extra click?</b>
+    Real — the TOTP secret is stored outside the vault entirely (Windows DPAPI, tied to
+    this PC), so decrypting the vault with the master secret does not also hand over
+    what's needed to generate a valid code. Full reasoning in section 8.</p>
   </div>
 
   <h2 class="section">1. Threat model</h2>
@@ -397,6 +401,8 @@
       <tr><td><code>drive-token\</code> (OAuth refresh token)</td><td>Yes, plaintext on disk</td><td><b>Genuinely sensitive</b> — a real bearer credential for Drive access (drive.file scope only) until revoked</td></tr>
       <tr><td><code>credentials.json</code></td><td>Yes, plaintext</td><td>Identifies the <i>app</i>, not a user — Google documents installed-app client secrets as non-confidential by nature</td></tr>
       <tr><td><code>settings.json</code> / <code>shares.json</code></td><td>Yes, plaintext</td><td>No secrets in either — bookkeeping only</td></tr>
+      <tr><td><code>mfa-totp.dat</code> (TOTP secret)</td><td>Yes, DPAPI-protected</td><td><b>Deliberately outside the vault</b> — see section 8. Tied to this Windows account via <code>ProtectedData</code>; unreadable if copied to another machine or account</td></tr>
+      <tr><td>TOTP backup code hashes (inside <code>VaultProfile</code>)</td><td>Yes, SHA-256 hashed</td><td>Only the hash is stored — the original code can't be recovered from it, and each is deleted the moment it's used</td></tr>
     </table>
   </div>
 
@@ -420,7 +426,64 @@
     </div>
   </div>
 
-  <h2 class="section">8. Known limitations, stated plainly</h2>
+  <h2 class="section">8. Two-factor authentication - why it's real, not theater</h2>
+  <div class="panel">
+    <p>
+      An optional second factor (Profile → <b>Two-Factor Authentication...</b>) - a TOTP
+      authenticator app or an emailed code - sits after the master secret. The one
+      design question that decides whether this is a genuine second factor or just an
+      extra click: <b>can someone who already has <code>vault.pvlt</code> and the master
+      secret also generate a valid code?</b> If the second factor's material lived
+      anywhere reachable by decrypting the vault, the answer would be yes, and "two
+      steps" would only ever cost an attacker one extra click.
+    </p>
+    <h3 style="margin-top:16px;">TOTP: the secret lives outside the vault entirely</h3>
+    <p>
+      The raw TOTP secret is stored DPAPI-protected (<code>ProtectedData.Protect</code>,
+      <code>DataProtectionScope.CurrentUser</code>) in its own file, never inside
+      <code>vault.pvlt</code>. Someone who steals the vault file (or a Drive copy) and
+      even correctly guesses the master secret still cannot compute a valid TOTP code
+      without also being logged into this exact Windows account on this exact machine -
+      DPAPI ties the key to the OS user profile that protected it. This is the load-
+      bearing design choice that makes TOTP here a real second factor rather than a
+      formality.
+    </p>
+    <p>
+      The trade-off, stated plainly: this secret does <b>not</b> travel to a new PC or
+      survive a disaster-recovery restore. Ten one-time backup codes (only their SHA-256
+      hashes stored, inside <code>VaultProfile</code> so they <i>do</i> travel with the
+      vault) are the recovery path - each works once, then its hash is deleted.
+      Regenerating TOTP invalidates every old backup code at the same time, same as any
+      mainstream provider.
+    </p>
+    <h3 style="margin-top:16px;">Email: no shared secret at all, and a narrower Google scope</h3>
+    <p>
+      No secret to protect - a fresh random 6-digit code is generated per attempt, held
+      only in memory, and emailed via Gmail using the exact same OAuth credential
+      already authorized for Drive. This is only a real second factor because it
+      depends on access to an inbox the attacker doesn't have - the vault file and
+      master secret alone are not enough to read the code, only to trigger it being
+      sent.
+    </p>
+    <div class="callout note">
+      <span class="icon">🔒</span>
+      <span>Gmail's send-only scope is requested <b>only</b> when Email MFA is actually
+      turned on, not for every Drive sign-in - someone who only wants Drive backup never
+      sees an unexpected "send email on your behalf" consent screen. See
+      <code>GoogleDriveSync.SignInAsync</code>'s <code>includeGmailSendScope</code>
+      parameter.</span>
+    </div>
+    <h3 style="margin-top:16px;">Both methods share one rule</h3>
+    <p>
+      The second-factor check runs strictly <i>after</i> a successful decrypt but
+      <i>before</i> the app treats the vault as unlocked - a wrong or cancelled code
+      immediately drops the decrypted vault from memory and returns to the master
+      secret prompt, the same as if the secret itself had been wrong. A decrypted vault
+      never sits around waiting on a second factor that might fail.
+    </p>
+  </div>
+
+  <h2 class="section">9. Known limitations, stated plainly</h2>
   <div class="panel">
     <ul>
       <li>No protection against a compromised end-user machine while the vault is unlocked.</li>
@@ -431,6 +494,12 @@
       <li>The desktop app's "Shared Links..." list can lag reality (an opened link still
         shows "Active" until the next expiry sweep) — a cosmetic gap, not a security one;
         the link itself is genuinely dead the instant it's consumed.</li>
+      <li>TOTP two-factor doesn't survive moving to a new PC or a disaster-recovery
+        restore, by design (section 8) — a backup code is the way back in, after which
+        TOTP is set up fresh on that machine.</li>
+      <li>Email two-factor requires Drive to be connected with Gmail's send-only scope
+        granted — there's no other zero-cost way to send the code, so it's unavailable
+        entirely offline or without a Google account.</li>
       <li>Google/GitHub account compromise is out of this app's own threat model — protect
         those accounts with their own strong authentication (2FA, etc).</li>
     </ul>

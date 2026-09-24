@@ -23,9 +23,10 @@ public class MainForm : Form
     private readonly Action<string?> _setDefaultBrowserPath;
     private readonly Func<string?> _getGitHubUsername;
     private readonly Action<string?> _setGitHubUsername;
-    private readonly Action _changeMasterSecret;
+    private readonly Func<Task> _changeMasterSecret;
     private readonly Func<string> _getDataFolder;
     private readonly Action<string> _changeDataFolder;
+    private readonly Action _openMfaSetup;
     private readonly Func<AccountEntry, TimeSpan, Task<string>> _shareAccount;
     private readonly ListView _listView;
     private readonly TextBox _searchBox;
@@ -90,9 +91,10 @@ public class MainForm : Form
         Action<string?> setDefaultBrowserPath,
         Func<string?> getGitHubUsername,
         Action<string?> setGitHubUsername,
-        Action changeMasterSecret,
+        Func<Task> changeMasterSecret,
         Func<string> getDataFolder,
         Action<string> changeDataFolder,
+        Action openMfaSetup,
         Func<AccountEntry, TimeSpan, Task<string>> shareAccount)
     {
         _vault = vault;
@@ -108,6 +110,7 @@ public class MainForm : Form
         _changeMasterSecret = changeMasterSecret;
         _getDataFolder = getDataFolder;
         _changeDataFolder = changeDataFolder;
+        _openMfaSetup = openMfaSetup;
         _shareAccount = shareAccount;
 
         Text = "Personal Vault";
@@ -1016,7 +1019,7 @@ public class MainForm : Form
 
     private void EditProfile()
     {
-        using var form = new ProfileForm(_vault.Profile, _getDefaultBrowserPath(), _getGitHubUsername(), _changeMasterSecret, _getDataFolder(), _changeDataFolder);
+        using var form = new ProfileForm(_vault.Profile, _getDefaultBrowserPath(), _getGitHubUsername(), _changeMasterSecret, _getDataFolder(), _changeDataFolder, _openMfaSetup);
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             _setDefaultBrowserPath(form.SelectedBrowserPath);

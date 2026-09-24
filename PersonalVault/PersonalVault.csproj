@@ -37,6 +37,14 @@
     <PackageReference Include="Google.Apis.Drive.v3" Version="1.68.0.3511" />
 
     <!--
+      Same OAuth credential as Drive - Storage/GoogleDriveSync.cs only requests Gmail's
+      send-only scope when Email MFA is actually used (SignInAsync's
+      includeGmailSendScope), not for every sign-in. Used only by
+      Storage/GmailSender.cs to send Email MFA's one-time codes.
+    -->
+    <PackageReference Include="Google.Apis.Gmail.v1" Version="1.75.0.4225" />
+
+    <!--
       Rich Windows toast notifications with action buttons. If this exact version isn't
       available when you restore, run:
         dotnet add package Microsoft.Toolkit.Uwp.Notifications
@@ -45,6 +53,13 @@
       registration issues on a given machine) degrades gracefully instead of crashing.
     -->
     <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
+
+    <!--
+      Windows DPAPI (CryptProtectData/CryptUnprotectData) for .NET - used only by
+      Storage/MfaSecretStorage.cs to keep the TOTP secret tied to this Windows account,
+      deliberately outside the encrypted vault. See that file's doc comment for why.
+    -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
   </ItemGroup>
 
   <ItemGroup>

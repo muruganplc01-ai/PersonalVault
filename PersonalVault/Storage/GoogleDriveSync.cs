@@ -20,6 +20,12 @@ namespace PersonalVault.Storage;
 public class GoogleDriveSync
 {
     private static readonly string[] Scopes = { DriveService.Scope.DriveFile };
+
+    // Requested only via SignInAsync's includeGmailSendScope, not for every sign-in -
+    // someone who only wants Drive backup should never see a "send email on your
+    // behalf" consent screen they didn't ask for. Only TrayApplicationContext's
+    // Email-MFA code path passes includeGmailSendScope: true.
+    private static readonly string[] ScopesWithGmailSend = { DriveService.Scope.DriveFile, "https://www.googleapis.com/auth/gmail.send" };
     private const string ApplicationName = "Personal Vault";
     public const string RemoteFileName = "PersonalVaultData.pvlt";
 
@@ -37,8 +43,12 @@ public class GoogleDriveSync
     public const string ShareFilePrefix = "PersonalVaultShare-";
 
     private DriveService? _service;
+    private UserCredential? _credential;
 
     public bool IsAuthenticated => _service != null;
+
+    /// <summary>Exposed so GmailSender can build a GmailService from the exact same authorized credential, without this class needing to reference the Gmail API package itself.</summary>
+    public UserCredential? Credential => _credential;
     public bool HasStoredCredentialsFile => File.Exists(AppPaths.CredentialsJsonPath);
 
     /// <summary>
@@ -47,8 +57,16 @@ public class GoogleDriveSync
     /// allowInteractive is true, it opens a browser window for the user to grant access.
     /// Returns false (without throwing) if credentials.json is missing, or if
     /// allowInteractive is false and there's no cached token to use yet.
+    ///
+    /// includeGmailSendScope additionally requests Gmail's send-only scope, needed only
+    /// for Email MFA - pass true only from that code path. GoogleWebAuthorizationBroker
+    /// reuses a cached token silently when its stored scopes already cover what's
+    /// requested, and only prompts again when they don't (e.g. the first time this is
+    /// called with includeGmailSendScope: true for an account that only ever signed in
+    /// with the base scope before) - so requesting the base scope elsewhere never shows
+    /// a Gmail consent screen to someone who hasn't touched Email MFA.
     /// </summary>
-    public async Task<bool> SignInAsync(bool allowInteractive)
+    public async Task<bool> SignInAsync(bool allowInteractive, bool includeGmailSendScope = false)
     {
         DebugLog.Write($"SignInAsync: called with allowInteractive={allowInteractive}. Already authenticated (_service != null)? {IsAuthenticated}");
 
@@ -78,13 +96,14 @@ public class GoogleDriveSync
 
             var credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
                 clientSecrets,
-                Scopes,
+                includeGmailSendScope ? ScopesWithGmailSend : Scopes,
                 "personal-vault-user",
                 CancellationToken.None,
                 new FileDataStore(AppPaths.TokenStoreFolder, true));
 
             DebugLog.Write("SignInAsync: AuthorizeAsync returned a credential without throwing - sign-in succeeded.");
 
+            _credential = credential;
             _service = new DriveService(new BaseClientService.Initializer
             {
                 HttpClientInitializer = credential,

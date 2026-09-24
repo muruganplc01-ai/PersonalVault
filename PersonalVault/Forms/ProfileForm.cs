@@ -44,7 +44,7 @@ public class ProfileForm : Form
     private readonly TextBox _nameBox = new() { Location = new Point(20, 182), Width = 340 };
     private readonly TextBox _browserPathBox = new() { Location = new Point(20, 268), Width = 250, ReadOnly = true };
     private readonly TextBox _gitHubUsernameBox = new() { Location = new Point(20, 350), Width = 250 };
-    private readonly TextBox _dataFolderBox = new() { Location = new Point(20, 566), Width = 250, ReadOnly = true };
+    private readonly TextBox _dataFolderBox = new() { Location = new Point(20, 656), Width = 250, ReadOnly = true };
 
     /// <summary>
     /// The chosen default-browser .exe path, or null to mean "use Windows' normal
@@ -58,8 +58,10 @@ public class ProfileForm : Form
     /// <summary>Same pattern as SelectedBrowserPath, for AppSettings.GitHubUsername.</summary>
     public string? GitHubUsername { get; private set; }
 
-    private readonly Action? _changeMasterSecret;
+    private readonly Func<Task>? _changeMasterSecret;
     private readonly Action<string>? _changeDataFolder;
+    private readonly Action? _openMfaSetup;
+    private readonly Label _mfaStatusLabel = new() { AutoSize = true, Location = new Point(20, 596), ForeColor = Color.DimGray };
 
     /// <summary>
     /// changeMasterSecret is TrayApplicationContext.ChangeSecret, passed in so the
@@ -67,23 +69,26 @@ public class ProfileForm : Form
     /// flow (ChangeSecretForm) without this form needing to know anything about secrets
     /// or encryption itself - null (its default) hides the button entirely, for any
     /// future caller that doesn't have that capability wired up. currentDataFolder/
-    /// changeDataFolder work the same way for Utils/DataFolderMover.MoveTo.
+    /// changeDataFolder work the same way for Utils/DataFolderMover.MoveTo, and
+    /// openMfaSetup for TrayApplicationContext.OpenMfaSetup (MfaSetupForm).
     /// </summary>
     public ProfileForm(
         VaultProfile profile,
         string? currentDefaultBrowserPath = null,
         string? currentGitHubUsername = null,
-        Action? changeMasterSecret = null,
+        Func<Task>? changeMasterSecret = null,
         string? currentDataFolder = null,
-        Action<string>? changeDataFolder = null)
+        Action<string>? changeDataFolder = null,
+        Action? openMfaSetup = null)
     {
         _profile = profile;
         _changeMasterSecret = changeMasterSecret;
         _changeDataFolder = changeDataFolder;
+        _openMfaSetup = openMfaSetup;
 
         Text = "Your Profile";
         Width = 400;
-        Height = 780;
+        Height = 880;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MaximizeBox = false;
@@ -140,7 +145,7 @@ public class ProfileForm : Form
 
         var masterPasswordLabel = new Label { Text = "Master password:", AutoSize = true, Location = new Point(20, 448), Visible = _changeMasterSecret != null };
         var changeSecretButton = new Button { Text = "Change Master Password...", AutoSize = true, Location = new Point(20, 468), Visible = _changeMasterSecret != null };
-        changeSecretButton.Click += (_, _) => _changeMasterSecret?.Invoke();
+        changeSecretButton.Click += async (_, _) => { if (_changeMasterSecret != null) await _changeMasterSecret(); };
         var changeSecretNote = new Label
         {
             Text = "Re-encrypts your entire vault under a new secret. You'll be asked for the " +
@@ -156,8 +161,14 @@ public class ProfileForm : Form
         Controls.Add(changeSecretButton);
         Controls.Add(changeSecretNote);
 
-        Controls.Add(new Label { Text = "Data folder:", AutoSize = true, Location = new Point(20, 546) });
-        var openFolderBtn = new Button { Text = "Open Folder", AutoSize = true, Location = new Point(280, 565) };
+        Controls.Add(new Label { Text = "Two-factor authentication:", AutoSize = true, Location = new Point(20, 546) });
+        var mfaButton = new Button { Text = "Two-Factor Authentication...", AutoSize = true, Location = new Point(20, 566), Visible = _openMfaSetup != null };
+        mfaButton.Click += (_, _) => { _openMfaSetup?.Invoke(); UpdateMfaStatusLabel(); };
+        Controls.Add(mfaButton);
+        Controls.Add(_mfaStatusLabel);
+
+        Controls.Add(new Label { Text = "Data folder:", AutoSize = true, Location = new Point(20, 636) });
+        var openFolderBtn = new Button { Text = "Open Folder", AutoSize = true, Location = new Point(280, 655) };
         openFolderBtn.Click += (_, _) => OpenDataFolder();
         Controls.Add(_dataFolderBox);
         Controls.Add(openFolderBtn);
@@ -166,7 +177,7 @@ public class ProfileForm : Form
         {
             Text = "Change Data Folder...",
             AutoSize = true,
-            Location = new Point(20, 596),
+            Location = new Point(20, 686),
             Visible = _changeDataFolder != null
         };
         changeFolderBtn.Click += (_, _) => ChangeDataFolder();
@@ -176,14 +187,14 @@ public class ProfileForm : Form
             Text = "Copies everything (vault, settings, Google Drive sign-in) to the new folder. " +
                    "The current folder is left in place as a backup - nothing is deleted.",
             AutoSize = false,
-            Location = new Point(20, 626),
+            Location = new Point(20, 716),
             Width = 350,
             Height = 40,
             ForeColor = Color.DimGray
         });
 
-        var cancelButton = new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel, Location = new Point(230, 685) };
-        var saveButton = new Button { Text = "Save", AutoSize = true, Location = new Point(315, 685) };
+        var cancelButton = new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel, Location = new Point(230, 775) };
+        var saveButton = new Button { Text = "Save", AutoSize = true, Location = new Point(315, 775) };
         saveButton.Click += SaveButton_Click;
         Controls.Add(cancelButton);
         Controls.Add(saveButton);
@@ -195,6 +206,7 @@ public class ProfileForm : Form
         _browserPathBox.Text = currentDefaultBrowserPath ?? string.Empty;
         _gitHubUsernameBox.Text = currentGitHubUsername ?? string.Empty;
         _dataFolderBox.Text = currentDataFolder ?? string.Empty;
+        UpdateMfaStatusLabel();
         if (_profile.HasPicture)
         {
             try
@@ -265,6 +277,17 @@ public class ProfileForm : Form
         GitHubUsername = string.IsNullOrEmpty(gitHubUsername) ? null : gitHubUsername;
 
         DialogResult = DialogResult.OK;
+    }
+
+    /// <summary>Reflects _profile.MfaMethod, which MfaSetupForm updates directly (same live-object pattern as everything else on _profile here) - called on load and again right after the setup dialog closes.</summary>
+    private void UpdateMfaStatusLabel()
+    {
+        _mfaStatusLabel.Text = _profile.MfaMethod switch
+        {
+            MfaMethod.Totp => "Currently: Authenticator app enabled",
+            MfaMethod.Email => $"Currently: Email code to {_profile.MfaEmailAddress}",
+            _ => "Currently: not enabled"
+        };
     }
 
     private void OpenDataFolder()

@@ -39,6 +39,18 @@ This is a working v2 - see "What's next" below for what's still just an idea.
   brand-new key (and new random salt) in one step, then re-uploads it to Drive. A new
   secret must meet the same 12-character/uppercase/lowercase/symbol requirement as
   creating a vault - see "First run" below.
+- **Two-factor authentication**: Profile → **Two-Factor Authentication...** adds a
+  second step after the master secret - either a standard TOTP authenticator app
+  (Google Authenticator, Authy, etc.) or an emailed one-time code. The authenticator
+  secret is deliberately stored outside the encrypted vault (Windows DPAPI, tied to this
+  PC and Windows account) rather than inside it, specifically so someone who steals
+  `vault.pvlt` and even correctly guesses the master secret still can't generate a valid
+  code - see `Instructions/PersonalVault-Security-Deep-Dive.html` for the full reasoning.
+  Ten one-time backup codes are generated when TOTP is turned on (shown once - save
+  them) and travel with the vault for exactly this reason: the authenticator secret
+  itself doesn't survive a move to a new PC, but a backup code does. Email codes instead
+  require Drive to be connected with Gmail's send-only scope granted (existing
+  Drive-connected accounts get prompted once to add it).
 - **Credit card details**: for a `CreditCard`-category entry, click **Card
   Details...** in the account editor for a structured popup (card number formatted as
   you type, expiration month/year dropdowns, security code, cardholder name) instead of
@@ -136,6 +148,12 @@ PersonalVault/
   Forms/SettingsForm.cs       Edit AutoLockMinutes / reminder days / Start with Windows
   Forms/ChangeSecretForm.cs   Change the master secret
   Security/PasswordPolicy.cs  Minimum-strength rule for a new/changed master secret
+  Security/TotpGenerator.cs  RFC 6238 TOTP (matches Google Authenticator/Authy et al.)
+  Security/Base32.cs         Base32 encode/decode - how a TOTP secret is shown/entered
+  Storage/MfaSecretStorage.cs  DPAPI-protected local TOTP secret, deliberately outside the vault
+  Storage/GmailSender.cs     Sends Email MFA's one-time code via the Drive-authorized Gmail scope
+  Forms/MfaSetupForm.cs      Profile's "Two-Factor Authentication..." configuration dialog
+  Forms/MfaVerifyForm.cs     The unlock-time second-factor prompt
   Forms/ShareAccountForm.cs   "Share Account" dialog - pick expiration, get a link
   Forms/SharedLinksForm.cs    "Shared Links..." - list/revoke active share links
   Forms/TrayApplicationContext.cs   Owns the tray icon and ties everything together
@@ -225,6 +243,11 @@ it access, the first time you click "Sign in to Google Drive" from the tray menu
 If you'd rather not deal with Google Cloud Console at all yet, you can skip this
 entirely - the app works fully offline against the local encrypted file, and you can
 wire up Drive later.
+
+**If you want Email two-factor authentication too:** also enable the **Gmail API** in
+the same project (step 2 above, same Library page). Nothing extra happens at normal
+sign-in either way - the app only asks Google for permission to send email at the
+moment you actually turn on Email MFA in Profile, not before.
 
 ## Sharing this with family members
 
@@ -431,6 +454,13 @@ if you genuinely want a fresh start.
   folder leaves the data behind. Use Profile -> **Change Data Folder...** first if you
   need to relocate deliberately (it copies everything and remembers the new location in
   the registry either way), rather than moving the `.exe` and folder separately by hand.
+- TOTP (authenticator app) two-factor is deliberately per-machine - the secret is stored
+  outside the vault (Windows DPAPI, tied to this PC/Windows account) so it can't be read
+  by simply decrypting a stolen vault file. It does **not** travel to a new PC or survive
+  a disaster-recovery restore, by design - a backup code (which does travel with the
+  vault) is the way back in, after which TOTP can be set up fresh on the new machine.
+  Email two-factor requires Drive to stay connected with Gmail's send-only scope granted
+  - there's no other zero-cost way to send the code.
 - Auto-lock (10 min idle by default, see "How it works" above) covers walking away from
   an unlocked PC, but the secret is still a plain in-memory `string` while unlocked -
   .NET strings are immutable and the GC doesn't scrub freed memory, so this isn't

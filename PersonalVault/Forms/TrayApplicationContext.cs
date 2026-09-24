@@ -116,8 +116,8 @@ public class TrayApplicationContext : ApplicationContext
         var menu = new ContextMenuStrip();
 
         menu.Items.Add("Open Vault", null, (_, _) => ShowMainForm());
-        menu.Items.Add("Profile...", null, (_, _) => OpenProfile());
-        menu.Items.Add("Shared Links...", null, (_, _) => OpenSharedLinks());
+        menu.Items.Add("Profile...", null, async (_, _) => await OpenProfile());
+        menu.Items.Add("Shared Links...", null, async (_, _) => await OpenSharedLinks());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Sync Now", null, async (_, _) => await SyncNowAsync());
 
@@ -126,7 +126,7 @@ public class TrayApplicationContext : ApplicationContext
         menu.Items.Add(_driveMenuItem);
 
         menu.Items.Add("Lock Now", null, (_, _) => Lock());
-        menu.Items.Add("Change Master Secret...", null, (_, _) => ChangeSecret());
+        menu.Items.Add("Change Master Secret...", null, async (_, _) => await ChangeSecret());
         menu.Items.Add("Settings...", null, (_, _) => OpenSettings());
 
         _startupMenuItem = new ToolStripMenuItem("Start with Windows")
@@ -172,12 +172,12 @@ public class TrayApplicationContext : ApplicationContext
         _mainForm?.UpdateDriveStatus(_drive.IsAuthenticated);
     }
 
-    private void OpenProfile()
+    private async Task OpenProfile()
     {
-        if (!EnsureUnlocked()) return;
+        if (!await EnsureUnlocked()) return;
         if (_vault == null) return;
 
-        using var form = new ProfileForm(_vault.Profile, _settings.DefaultBrowserPath, _settings.GitHubUsername, ChangeSecret, AppPaths.RootFolder, ChangeDataFolder);
+        using var form = new ProfileForm(_vault.Profile, _settings.DefaultBrowserPath, _settings.GitHubUsername, ChangeSecret, AppPaths.RootFolder, ChangeDataFolder, OpenMfaSetup);
         if (form.ShowDialog() == DialogResult.OK)
         {
             SetDefaultBrowserPath(form.SelectedBrowserPath);
@@ -187,9 +187,9 @@ public class TrayApplicationContext : ApplicationContext
         }
     }
 
-    private void OpenSharedLinks()
+    private async Task OpenSharedLinks()
     {
-        if (!EnsureUnlocked()) return;
+        if (!await EnsureUnlocked()) return;
 
         _shareExpiry?.CheckNowAsync(); // catch up on anything missed while this window was closed, before showing the list
         using var form = new SharedLinksForm(_shares, RevokeShareNowAsync);
@@ -390,7 +390,7 @@ public class TrayApplicationContext : ApplicationContext
 
                             if (restore == DialogResult.Yes)
                             {
-                                restored = RestoreVaultFromBytes(remoteBytes);
+                                restored = await RestoreVaultFromBytes(remoteBytes);
                                 if (restored)
                                 {
                                     _driveFileId = remoteFileId;
@@ -418,7 +418,7 @@ public class TrayApplicationContext : ApplicationContext
 
             if (!restored)
             {
-                if (!UnlockVault(firstRun))
+                if (!await UnlockVault(firstRun))
                 {
                     ExitApplication();
                     return;
@@ -490,7 +490,7 @@ public class TrayApplicationContext : ApplicationContext
     }
 
     /// <summary>Prompts for the master secret (looping on wrong-secret errors) and loads/creates the vault.</summary>
-    private bool UnlockVault(bool creating)
+    private async Task<bool> UnlockVault(bool creating)
     {
         using var form = new UnlockForm(creating ? UnlockMode.CreateNew : UnlockMode.UnlockExisting);
 
@@ -512,6 +512,17 @@ public class TrayApplicationContext : ApplicationContext
                     _vault = VaultStorage.LoadLocal(form.Secret);
                     _secret = form.Secret;
                 }
+
+                if (!await VerifyMfaAsync())
+                {
+                    // A wrong/cancelled second factor must never leave a decrypted
+                    // vault sitting in memory - drop it and go back to the secret
+                    // prompt, same as if the secret itself had been wrong.
+                    _vault = null;
+                    _secret = null;
+                    continue;
+                }
+
                 return true;
             }
             catch (CryptographicException)
@@ -528,7 +539,7 @@ public class TrayApplicationContext : ApplicationContext
     /// copy from now on. Loops on wrong-secret errors the same way UnlockVault does.
     /// Returns false only if the user cancels out of the dialog entirely.
     /// </summary>
-    private bool RestoreVaultFromBytes(byte[] remoteBytes)
+    private async Task<bool> RestoreVaultFromBytes(byte[] remoteBytes)
     {
         using var form = new UnlockForm(UnlockMode.RestoreFromBackup);
 
@@ -542,6 +553,14 @@ public class TrayApplicationContext : ApplicationContext
                 _vault = VaultStorage.LoadFromBytes(remoteBytes, form.Secret);
                 _secret = form.Secret;
                 VaultStorage.SaveLocal(_vault, _secret);
+
+                if (!await VerifyMfaAsync())
+                {
+                    _vault = null;
+                    _secret = null;
+                    continue;
+                }
+
                 return true;
             }
             catch (CryptographicException)
@@ -653,7 +672,7 @@ public class TrayApplicationContext : ApplicationContext
     /// If locked, prompts for the secret and re-loads the vault before letting the
     /// caller proceed. Returns false (leaving the vault locked) if the user cancels.
     /// </summary>
-    private bool EnsureUnlocked()
+    private async Task<bool> EnsureUnlocked()
     {
         if (!_isLocked) return true;
 
@@ -667,6 +686,14 @@ public class TrayApplicationContext : ApplicationContext
             {
                 _vault = VaultStorage.LoadLocal(form.Secret);
                 _secret = form.Secret;
+
+                if (!await VerifyMfaAsync())
+                {
+                    _vault = null;
+                    _secret = null;
+                    continue;
+                }
+
                 _payments = PaymentsStorage.LoadLocalOrEmpty(_secret);
                 _isLocked = false;
                 _trayIcon.Text = "Personal Vault";
@@ -681,7 +708,117 @@ public class TrayApplicationContext : ApplicationContext
         }
     }
 
-    private void ShowMainForm()
+    /// <summary>
+    /// The second-factor gate - called from UnlockVault/RestoreVaultFromBytes/
+    /// EnsureUnlocked right after a successful decrypt, before any of them return
+    /// success. Returns true immediately (no prompt at all) when
+    /// _vault.Profile.MfaMethod is None, which is every vault that hasn't opted in -
+    /// unlock behavior for those is completely unchanged. For Email, sends the code
+    /// before showing the prompt so it's already on its way when the dialog appears.
+    /// </summary>
+    private async Task<bool> VerifyMfaAsync()
+    {
+        if (_vault == null) return true;
+
+        var method = _vault.Profile.MfaMethod;
+        if (method == MfaMethod.None) return true;
+
+        string? expectedEmailCode = null;
+        if (method == MfaMethod.Email)
+        {
+            try
+            {
+                expectedEmailCode = await SendMfaEmailCodeAsync(_vault.Profile.MfaEmailAddress);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Could not send the verification email: " + ex.Message,
+                    "Personal Vault", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+        }
+
+        using var form = new MfaVerifyForm(method);
+        while (true)
+        {
+            var result = form.ShowDialog();
+
+            if (result == DialogResult.Cancel) return false;
+
+            if (result == DialogResult.Retry) // "Resend Code" - Email method only
+            {
+                try { expectedEmailCode = await SendMfaEmailCodeAsync(_vault.Profile.MfaEmailAddress); }
+                catch (Exception ex) { form.ShowError("Could not resend: " + ex.Message); }
+                continue;
+            }
+
+            if (method == MfaMethod.Totp)
+            {
+                if (form.UsingBackupCode)
+                {
+                    string hash = MfaSetupForm.HashBackupCode(form.EnteredCode);
+                    if (_vault.Profile.MfaBackupCodeHashes.Remove(hash))
+                    {
+                        SaveVault(); // consume it immediately - a backup code only ever works once, and this needs to sync too
+                        return true;
+                    }
+                    form.ShowError("That backup code is invalid or has already been used.");
+                    continue;
+                }
+
+                byte[]? secret = MfaSecretStorage.Load();
+                if (secret != null && TotpGenerator.Validate(secret, form.EnteredCode))
+                    return true;
+
+                form.ShowError(secret == null
+                    ? "No authenticator is set up on this PC - use a backup code instead."
+                    : "Incorrect code. Please try again.");
+            }
+            else // Email
+            {
+                if (expectedEmailCode != null && form.EnteredCode == expectedEmailCode)
+                    return true;
+                form.ShowError("Incorrect code.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Generates a random 6-digit code and emails it via GmailSender, always
+    /// (re-)authorizing first - GoogleWebAuthorizationBroker reuses a cached credential
+    /// silently when its scopes already cover gmail.send, and only prompts when they
+    /// don't (e.g. the very first time Email MFA is used, or for an account that signed
+    /// in to Drive before this scope existed) - so this doesn't pop a browser window on
+    /// every call, only when it actually needs to.
+    /// </summary>
+    private async Task<string> SendMfaEmailCodeAsync(string address)
+    {
+        bool signedIn = await _drive.SignInAsync(allowInteractive: true, includeGmailSendScope: true);
+        if (!signedIn)
+            throw new InvalidOperationException("Google Drive sign-in is required to send Email MFA codes.");
+
+        string code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
+        await GmailSender.SendCodeAsync(_drive, address, code);
+        return code;
+    }
+
+    /// <summary>Profile's "Two-Factor Authentication..." button. MfaSetupForm mutates _vault.Profile directly (same pattern as ProfileForm itself); SaveVault() persists+uploads it on OK.</summary>
+    private void OpenMfaSetup()
+    {
+        if (_vault == null) return;
+
+        using var form = new MfaSetupForm(
+            _vault.Profile,
+            _vault.Profile.Name,
+            MfaSecretStorage.Exists(),
+            MfaSecretStorage.Save,
+            MfaSecretStorage.Delete,
+            SendMfaEmailCodeAsync);
+        if (form.ShowDialog() == DialogResult.OK)
+            SaveVault();
+    }
+
+    private async void ShowMainForm()
     {
         // This can be reached from a thread other than the UI thread - most notably a
         // toast notification's "Open Vault" button, which Windows activates via a
@@ -694,7 +831,7 @@ public class TrayApplicationContext : ApplicationContext
             return;
         }
 
-        if (!EnsureUnlocked()) return;
+        if (!await EnsureUnlocked()) return;
         if (_vault == null || _secret == null) return;
 
         if (_mainForm == null || _mainForm.IsDisposed)
@@ -715,6 +852,7 @@ public class TrayApplicationContext : ApplicationContext
                 ChangeSecret,
                 () => AppPaths.RootFolder,
                 ChangeDataFolder,
+                OpenMfaSetup,
                 ShareAccountAsync);
             _mainForm.FormClosing += (_, e) =>
             {
@@ -1080,7 +1218,7 @@ public class TrayApplicationContext : ApplicationContext
     private async Task SyncNowAsync(bool silent = false)
     {
         DebugLog.Write($"SyncNowAsync: called with silent={silent}.");
-        if (!EnsureUnlocked())
+        if (!await EnsureUnlocked())
         {
             DebugLog.Write("SyncNowAsync: EnsureUnlocked() returned false (still locked / user cancelled the unlock prompt) - aborting.");
             return;
@@ -1253,7 +1391,7 @@ public class TrayApplicationContext : ApplicationContext
                 "Personal Vault", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             if (restore != DialogResult.Yes) return;
 
-            if (RestoreVaultFromBytes(remoteBytes))
+            if (await RestoreVaultFromBytes(remoteBytes))
             {
                 _driveFileId = remoteFileId;
                 _settings.DriveFileId = _driveFileId;
@@ -1271,9 +1409,9 @@ public class TrayApplicationContext : ApplicationContext
         }
     }
 
-    private void ChangeSecret()
+    private async Task ChangeSecret()
     {
-        if (!EnsureUnlocked()) return;
+        if (!await EnsureUnlocked()) return;
         if (_vault == null || _secret == null) return;
 
         using var form = new ChangeSecretForm();
