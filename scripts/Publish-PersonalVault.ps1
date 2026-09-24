@@ -66,8 +66,13 @@ $zipPath = Join-Path $PublishDir "PersonalVault-Publish-$timestamp.zip"
 
 if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
 
+# .pdb is debug symbols only (crash stack traces for you, the developer) - a recipient
+# never needs it to run the app, so it's left out of the zip (still sits in PublishDir
+# alongside the exe if you need it yourself).
+$filesToZip = Get-ChildItem $PublishDir -Exclude "*.pdb", "*.zip"
+
 Write-Host "Zipping to $zipPath ..."
-Compress-Archive -Path (Join-Path $PublishDir "*") -DestinationPath $zipPath
+Compress-Archive -Path $filesToZip.FullName -DestinationPath $zipPath
 
 Write-Host ""
 Write-Host "Done: $zipPath" -ForegroundColor Green
