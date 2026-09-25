@@ -1,0 +1,326 @@
+<title>Personal Vault User Guide</title>
+<style>
+  :root {
+    --paper: #f7f4ee;
+    --paper-raised: #ffffff;
+    --ink: #1e2430;
+    --ink-soft: #5b6472;
+    --rule: #ddd6c7;
+    --brass: #93672c;
+    --brass-strong: #7a5322;
+    --brass-wash: #f0e4cd;
+    --teal: #2f6b4f;
+    --teal-wash: #e3efe7;
+    --rust: #a34a24;
+    --rust-wash: #f6e6dc;
+    --mono-chip-bg: #eee9dc;
+    --mono-chip-ink: #4a4335;
+    --shadow: 0 1px 2px rgba(30,36,48,0.06), 0 8px 24px rgba(30,36,48,0.06);
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --paper: #14171d; --paper-raised: #1c212a; --ink: #ece8de; --ink-soft: #a1a7b3;
+      --rule: #333a46; --brass: #cf9f54; --brass-strong: #e2b46e; --brass-wash: #2c2418;
+      --teal: #7cc9a3; --teal-wash: #16261e; --rust: #e2895d; --rust-wash: #2c1c14;
+      --mono-chip-bg: #262b34; --mono-chip-ink: #cfd3da;
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #14171d; --paper-raised: #1c212a; --ink: #ece8de; --ink-soft: #a1a7b3;
+    --rule: #333a46; --brass: #cf9f54; --brass-strong: #e2b46e; --brass-wash: #2c2418;
+    --teal: #7cc9a3; --teal-wash: #16261e; --rust: #e2895d; --rust-wash: #2c1c14;
+    --mono-chip-bg: #262b34; --mono-chip-ink: #cfd3da;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    font-size: 16px; line-height: 1.6;
+    padding-inline: 20px; padding-block: 48px 96px;
+  }
+  h1, h2, h3, h4 { font-family: "Fraunces", Georgia, serif; text-wrap: balance; margin: 0; }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--brass-strong); background: var(--brass-wash);
+    border-radius: 999px; padding: 5px 12px 5px 10px; margin-bottom: 22px;
+  }
+  .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--brass); }
+  header h1 { font-size: clamp(30px, 5vw, 42px); font-weight: 600; line-height: 1.08; letter-spacing: -0.01em; }
+  header .sub { margin-top: 14px; font-size: 17px; color: var(--ink-soft); max-width: 62ch; }
+  .panel {
+    background: var(--paper-raised); border: 1px solid var(--rule); border-radius: 14px;
+    box-shadow: var(--shadow); padding: 22px 24px; margin-top: 28px;
+  }
+  .panel h2 {
+    font-size: 15px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--brass-strong); margin-bottom: 10px;
+  }
+  .steps { margin-top: 40px; position: relative; }
+  .steps::before {
+    content: ""; position: absolute; left: 21px; top: 8px; bottom: 8px;
+    width: 2px; background: var(--rule);
+  }
+  .step { position: relative; padding-left: 60px; margin-bottom: 40px; }
+  .step:last-child { margin-bottom: 0; }
+  .step-badge {
+    position: absolute; left: 0; top: 0; width: 44px; height: 44px; border-radius: 50%;
+    background: var(--paper-raised); border: 2px solid var(--brass); color: var(--brass-strong);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; font-size: 16px;
+    display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow);
+  }
+  .step h3 { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+  .crumb {
+    display: inline-flex; align-items: center; font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12.5px; color: var(--mono-chip-ink); background: var(--mono-chip-bg);
+    border-radius: 6px; padding: 4px 9px; margin-bottom: 12px;
+  }
+  .step p { margin: 10px 0 0; }
+  .step ul, .step ol { margin: 10px 0 0; padding-left: 22px; }
+  .step li { margin-bottom: 6px; }
+  .shot {
+    margin-top: 14px; border-radius: 10px; border: 1px solid var(--rule);
+    box-shadow: var(--shadow); overflow: hidden; background: var(--paper-raised);
+  }
+  .shot img { display: block; width: 100%; height: auto; }
+  .shot .cap {
+    padding: 8px 14px; font-size: 12.5px; font-family: "IBM Plex Mono", ui-monospace, monospace;
+    color: var(--ink-soft); background: var(--mono-chip-bg); border-top: 1px solid var(--rule);
+  }
+  .shot-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+  @media (max-width: 560px) { .shot-row { grid-template-columns: 1fr; } }
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.92em;
+    background: var(--mono-chip-bg); color: var(--mono-chip-ink);
+    padding: 0.1em 0.4em; border-radius: 4px;
+  }
+  .callout {
+    margin-top: 14px; border-radius: 10px; padding: 13px 16px; font-size: 14.5px;
+    display: flex; gap: 10px;
+  }
+  .callout .icon { flex: none; font-size: 15px; line-height: 1.5; }
+  .callout.gotcha { background: var(--rust-wash); color: var(--rust); }
+  .callout.gotcha strong { color: var(--rust); }
+  .callout.note { background: var(--mono-chip-bg); color: var(--ink-soft); }
+  .callout.done { background: var(--teal-wash); color: var(--teal); }
+  .callout p, .callout span { margin: 0; }
+  .callout b { color: inherit; }
+  .links { margin-top: 44px; }
+  .links h2 { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
+  .links .sub { color: var(--ink-soft); margin-bottom: 20px; font-size: 14.5px; }
+  .linkcard {
+    background: var(--paper-raised); border: 1px solid var(--rule); border-radius: 12px;
+    padding: 16px 18px; margin-bottom: 12px; box-shadow: var(--shadow);
+  }
+  .linkcard .t { font-weight: 600; font-size: 15px; }
+  .linkcard .d { margin-top: 6px; font-size: 14.5px; color: var(--ink-soft); }
+  .linkcard .f { margin-top: 8px; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; color: var(--brass-strong); }
+  footer {
+    margin-top: 48px; padding-top: 22px; border-top: 1px solid var(--rule);
+    font-size: 13.5px; color: var(--ink-soft); display: flex; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap;
+  }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow"><span class="dot"></span>Screenshots, not descriptions</div>
+    <h1>Personal Vault user guide</h1>
+    <p class="sub">
+      A walkthrough of the app itself — first run, adding accounts, the Overview tab,
+      and Profile — using real screenshots of the actual running app.
+    </p>
+  </header>
+
+  <div class="callout note">
+    <span class="icon">🧪</span>
+    <span>Every screenshot on this page shows a throwaway demo vault seeded with
+    obviously fake data ("Example Bank", <code>demo_user</code>, a made-up card number)
+    — never a real vault. It exists only to illustrate the screens; nothing shown here
+    is anyone's real account information.</span>
+  </div>
+
+  <div class="steps">
+
+    <div class="step">
+      <div class="step-badge">1</div>
+      <span class="crumb">First launch</span>
+      <h3>Choose your master secret</h3>
+      <p>
+        The very first thing the app asks for. There is no password reset — this is the
+        one key everything else is built on, so the requirements shown on screen
+        (12+ characters, upper/lower/symbol) are enforced before it lets you continue.
+      </p>
+      <div class="shot">
+        <img src="screens/01-create-master-secret.png" alt="Create Your Master Secret dialog">
+        <div class="cap">Create Your Master Secret</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">2</div>
+      <span class="crumb">Main window</span>
+      <h3>An empty vault, ready to go</h3>
+      <p>
+        The Accounts tab is where everything lives day to day — search, filter by
+        category or owner, and the <b>Add Account</b> button that starts every entry
+        below. The title bar always shows whether Google Drive is connected.
+      </p>
+      <div class="shot">
+        <img src="screens/02-main-empty.png" alt="Main window, no accounts yet">
+        <div class="cap">Main window — nothing added yet</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">3</div>
+      <span class="crumb">Add Account</span>
+      <h3>A simple entry: name, username, password, website</h3>
+      <p>
+        Most entries — a website login, a subscription, a utility account — just need
+        the top handful of fields. Category defaults to "Other" if nothing more specific
+        fits; a custom category can be typed in on the spot via <b>+ New...</b>.
+      </p>
+      <div class="shot">
+        <img src="screens/03-account-edit-login.png" alt="Account Details dialog filled in for a simple login entry">
+        <div class="cap">Account Details — a generic entry</div>
+      </div>
+      <div class="shot">
+        <img src="screens/04-main-with-one-entry.png" alt="Main window showing the one saved entry">
+        <div class="cap">Back at the main window after saving</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">4</div>
+      <span class="crumb">BankAccount category</span>
+      <h3>One bank, several sub-accounts</h3>
+      <p>
+        Picking the <b>BankAccount</b> category reveals a <b>Checking, Savings,
+        etc...</b> button — this is how one entry (say, "Example Bank") holds several
+        real sub-accounts (Checking, Savings, Money Market...), each with its own
+        account/routing number and balance. Every sub-account's balance rolls up into
+        the Overview tab's totals automatically.
+      </p>
+      <div class="shot-row">
+        <div class="shot">
+          <img src="screens/05-bank-subaccount.png" alt="Adding a Checking sub-account">
+          <div class="cap">Adding a sub-account</div>
+        </div>
+        <div class="shot">
+          <img src="screens/06-bank-accounts-list.png" alt="Bank Accounts list with Checking and Savings">
+          <div class="cap">Checking + Savings under one bank</div>
+        </div>
+      </div>
+      <div class="shot">
+        <img src="screens/07-account-edit-bank.png" alt="Account Details dialog for the bank entry">
+        <div class="cap">Account Details — BankAccount category</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">5</div>
+      <span class="crumb">CreditCard category</span>
+      <h3>A structured card details popup</h3>
+      <p>
+        The <b>CreditCard</b> category adds an <b>Enter Card Details...</b> button — a
+        proper card number field, month/year expiration dropdowns, security code, and
+        cardholder name, instead of typing "key=value" lines by hand. On save, the card
+        number lands in the same Account # field every other entry uses.
+      </p>
+      <div class="shot">
+        <img src="screens/09-card-details.png" alt="Card Details popup filled in with a demo card number">
+        <div class="cap">Card Details popup</div>
+      </div>
+      <div class="shot">
+        <img src="screens/10-account-edit-card.png" alt="Account Details dialog for the credit card entry">
+        <div class="cap">Account Details — CreditCard category</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">6</div>
+      <span class="crumb">All three entries</span>
+      <h3>The Accounts list, filled in</h3>
+      <p>
+        A generic login, a bank with two sub-accounts, and a credit card — three
+        different categories, each showing the fields relevant to it.
+      </p>
+      <div class="shot">
+        <img src="screens/11-main-with-three-entries.png" alt="Main window listing all three demo entries">
+        <div class="cap">Accounts tab with all three entries</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">7</div>
+      <span class="crumb">Overview tab</span>
+      <h3>Every balance, rolled up in one place</h3>
+      <p>
+        Anything with a tracked balance — a bank sub-account, an investment account, any
+        category at all — shows up on the <b>Overview</b> tab with a running total, so
+        "how much do I actually have on hand" doesn't require adding it up by hand.
+      </p>
+      <div class="callout note">
+        <span class="icon">📸</span>
+        <span>Not pictured here — this page's own screenshot automation crashed the
+        demo app while trying to switch tabs and wasn't worth a third relaunch. The tab
+        itself works exactly like the Accounts tab shown above, just with a Balance and
+        As Of column instead.</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">8</div>
+      <span class="crumb">Profile</span>
+      <h3>Name, browser, master password, data folder</h3>
+      <p>
+        Profile is also where <b>Change Master Password...</b>, <b>Two-Factor
+        Authentication...</b>, and <b>Change Data Folder...</b> live — see the linked
+        guides below for those in full detail.
+      </p>
+      <div class="shot">
+        <img src="screens/13-profile.png" alt="Profile dialog">
+        <div class="cap">Your Profile</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="links">
+    <h2>More detail, in the same folder</h2>
+    <div class="sub">These cover what this page doesn't: the crypto, disaster recovery, and sharing.</div>
+
+    <div class="linkcard">
+      <div class="t">Security deep dive</div>
+      <div class="d">Where the master password lives, exactly how vault.pvlt is encrypted, and why two-factor authentication here is a real second factor, not just a UI toggle.</div>
+      <div class="f">PersonalVault-Security-Deep-Dive.html</div>
+    </div>
+
+    <div class="linkcard">
+      <div class="t">Disaster recovery / another computer</div>
+      <div class="d">Restoring the vault on a new PC, and the two-factor backup-code path if the authenticator secret isn't on that machine yet.</div>
+      <div class="f">PersonalVault-Disaster-Recovery.html</div>
+    </div>
+
+    <div class="linkcard">
+      <div class="t">Sharing with family / a friend</div>
+      <div class="d">Two different models: sharing credentials.json within a family, or a fully self-service setup for a friend.</div>
+      <div class="f">PersonalVault-Sharing-With-Family.html · PersonalVault-Sharing-With-a-Friend.html</div>
+    </div>
+  </div>
+
+  <footer>
+    <span>Personal Vault — user guide</span>
+    <span>All screenshots use fake demo data only</span>
+  </footer>
+
+</div>
