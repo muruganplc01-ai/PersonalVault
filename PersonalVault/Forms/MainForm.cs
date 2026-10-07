@@ -794,9 +794,20 @@ public class MainForm : Form
     /// ones already in use), for seeding the Category dropdown in a new/edited
     /// account's Account Details dialog.
     /// </summary>
+    /// <summary>
+    /// Every category "known" to this vault - the built-in defaults, whatever's
+    /// actually in use on a saved account, plus any category that merely has a custom
+    /// fields template or a custom default configured (Profile -> "Category Defaults...",
+    /// Account Details' "+ Category Fields") even if no account has been saved under it
+    /// yet - otherwise a category defined that way wouldn't show up in the category
+    /// filter or in Category Defaults' own "Add..." picker until an account using it
+    /// was actually saved.
+    /// </summary>
     private IEnumerable<string> KnownCategories() =>
         AccountCategories.Defaults
             .Union(_vault.Accounts.Select(a => a.Category).Where(c => !string.IsNullOrWhiteSpace(c)), StringComparer.OrdinalIgnoreCase)
+            .Union(_vault.CustomCategoryFields.Keys, StringComparer.OrdinalIgnoreCase)
+            .Union(_vault.CustomCategoryDefaults.Keys, StringComparer.OrdinalIgnoreCase)
             .OrderBy(c => c, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
