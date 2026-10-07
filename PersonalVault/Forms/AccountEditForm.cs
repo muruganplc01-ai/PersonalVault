@@ -17,6 +17,7 @@ public class AccountEditForm : Form
     private readonly Func<string, string[]?>? _getCustomCategoryFields;
     private readonly Action<string, string[]>? _saveCustomCategoryFields;
     private readonly Func<string, CategoryDefault?>? _getCustomCategoryDefault;
+    private readonly Action<string, CategoryDefault>? _saveCustomCategoryDefault;
     private readonly bool _isNewEntry;
 
     private const string CreditCardCategory = "CreditCard";
@@ -86,7 +87,8 @@ public class AccountEditForm : Form
         Func<string, string[]?>? getCustomCategoryFields = null,
         Action<string, string[]>? saveCustomCategoryFields = null,
         bool isNewEntry = false,
-        Func<string, CategoryDefault?>? getCustomCategoryDefault = null)
+        Func<string, CategoryDefault?>? getCustomCategoryDefault = null,
+        Action<string, CategoryDefault>? saveCustomCategoryDefault = null)
     {
         _entry = entry;
         _defaultOwnerName = defaultOwnerName;
@@ -95,6 +97,7 @@ public class AccountEditForm : Form
         _saveCustomCategoryFields = saveCustomCategoryFields;
         _isNewEntry = isNewEntry;
         _getCustomCategoryDefault = getCustomCategoryDefault;
+        _saveCustomCategoryDefault = saveCustomCategoryDefault;
 
         Text = "Account Details";
         Width = 540;
@@ -509,13 +512,36 @@ public class AccountEditForm : Form
         var existing = _categoryBox.Items.Cast<string>()
             .FirstOrDefault(c => string.Equals(c, name, StringComparison.OrdinalIgnoreCase));
 
-        if (existing == null)
+        bool isGenuinelyNew = existing == null;
+        if (isGenuinelyNew)
         {
             _categoryBox.Items.Add(name);
             existing = name;
         }
 
         _categoryBox.SelectedItem = existing;
+
+        // Offer to set Repeats/Autopay/Institution defaults for this category right
+        // here, instead of saving this entry and then going to Profile -> "Category
+        // Defaults..." separately to do the same thing - same "offer it inline the
+        // first time it's needed" idea as OfferToDefineCategoryFields below, just for
+        // defaults instead of suggested field names. Only offered for a category that
+        // didn't already exist (one already in use may well already have a default set).
+        if (isGenuinelyNew && _saveCustomCategoryDefault != null)
+        {
+            var offer = MessageBox.Show(this,
+                $"Set default Repeats/Autopay/Institution for \"{name}\" now?\n\n" +
+                "This is remembered for every future account in this category, not just this one. " +
+                "You can also do this later from Profile -> \"Category Defaults...\".",
+                "Personal Vault", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (offer != DialogResult.Yes) return;
+
+            using var defaultForm = new CategoryDefaultForm(name, null, _categoryBox.Items.Cast<string>());
+            if (defaultForm.ShowDialog(this) != DialogResult.OK) return;
+
+            _saveCustomCategoryDefault(defaultForm.Category, defaultForm.Result);
+            if (_isNewEntry) ApplyCategoryDefaults(); // so this entry benefits immediately too, not just future ones
+        }
     }
 
     /// <summary>

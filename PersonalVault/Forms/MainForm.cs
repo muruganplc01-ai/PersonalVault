@@ -602,7 +602,7 @@ public class MainForm : Form
         if (_balancesListView.SelectedItems.Count == 0) return;
         var account = (AccountEntry)_balancesListView.SelectedItems[0].Tag!;
 
-        using var form = new AccountEditForm(account, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields, getCustomCategoryDefault: GetCategoryDefault);
+        using var form = new AccountEditForm(account, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields, getCustomCategoryDefault: GetCategoryDefault, saveCustomCategoryDefault: SaveCategoryDefault);
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             account.ModifiedUtc = DateTime.UtcNow;
@@ -836,6 +836,24 @@ public class MainForm : Form
             .FirstOrDefault(kv => string.Equals(kv.Key, category, StringComparison.OrdinalIgnoreCase))
             .Value;
 
+    /// <summary>
+    /// Saves (or overwrites) a category default from Account Details' inline "set
+    /// defaults for this new category now?" offer (AccountEditForm.AddNewCategory),
+    /// and persists the vault immediately - same reasoning as SaveCustomCategoryFields
+    /// above, so the definition isn't lost even if this particular account edit is
+    /// cancelled afterward.
+    /// </summary>
+    private void SaveCategoryDefault(string category, CategoryDefault categoryDefault)
+    {
+        var existingKey = _vault.CustomCategoryDefaults.Keys
+            .FirstOrDefault(k => string.Equals(k, category, StringComparison.OrdinalIgnoreCase));
+        if (existingKey != null)
+            _vault.CustomCategoryDefaults.Remove(existingKey);
+
+        _vault.CustomCategoryDefaults[category] = categoryDefault;
+        _save();
+    }
+
     /// <summary>Profile's "Category Defaults..." button - lets you manage CustomCategoryDefaults yourself instead of editing code.</summary>
     private void OpenCategoryDefaults()
     {
@@ -868,7 +886,7 @@ public class MainForm : Form
         if (_categoryFilter.SelectedItem is string selectedCategory && selectedCategory != AllCategoriesLabel)
             entry.Category = selectedCategory;
 
-        using var form = new AccountEditForm(entry, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields, isNewEntry: true, getCustomCategoryDefault: GetCategoryDefault);
+        using var form = new AccountEditForm(entry, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields, isNewEntry: true, getCustomCategoryDefault: GetCategoryDefault, saveCustomCategoryDefault: SaveCategoryDefault);
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             _vault.Accounts.Add(entry);
@@ -884,7 +902,7 @@ public class MainForm : Form
         var account = SelectedAccount();
         if (account == null) return;
 
-        using var form = new AccountEditForm(account, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields, getCustomCategoryDefault: GetCategoryDefault);
+        using var form = new AccountEditForm(account, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields, getCustomCategoryDefault: GetCategoryDefault, saveCustomCategoryDefault: SaveCategoryDefault);
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             account.ModifiedUtc = DateTime.UtcNow;
