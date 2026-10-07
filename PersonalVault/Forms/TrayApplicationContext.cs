@@ -853,7 +853,8 @@ public class TrayApplicationContext : ApplicationContext
                 () => AppPaths.RootFolder,
                 ChangeDataFolder,
                 OpenMfaSetup,
-                ShareAccountAsync);
+                ShareAccountAsync,
+                (title, message) => Notify(title, message));
             _mainForm.FormClosing += (_, e) =>
             {
                 // Closing the window just hides it - the app keeps running in the tray

@@ -28,6 +28,7 @@ public class MainForm : Form
     private readonly Action<string> _changeDataFolder;
     private readonly Action _openMfaSetup;
     private readonly Func<AccountEntry, TimeSpan, Task<string>> _shareAccount;
+    private readonly Action<string, string> _notify;
     private readonly ListView _listView;
     private readonly TextBox _searchBox;
     private readonly ComboBox _categoryFilter;
@@ -95,7 +96,8 @@ public class MainForm : Form
         Func<string> getDataFolder,
         Action<string> changeDataFolder,
         Action openMfaSetup,
-        Func<AccountEntry, TimeSpan, Task<string>> shareAccount)
+        Func<AccountEntry, TimeSpan, Task<string>> shareAccount,
+        Action<string, string> notify)
     {
         _vault = vault;
         _save = save;
@@ -112,6 +114,7 @@ public class MainForm : Form
         _changeDataFolder = changeDataFolder;
         _openMfaSetup = openMfaSetup;
         _shareAccount = shareAccount;
+        _notify = notify;
 
         Text = "Personal Vault";
         Width = 960;
@@ -337,8 +340,11 @@ public class MainForm : Form
         _markPaidButton.Click += (_, _) => MarkSelectedDuePaid();
         var backfillButton = new Button { Text = "Backfill Past Payment...", AutoSize = true };
         backfillButton.Click += (_, _) => BackfillPastPayment();
+        var duesOpenUrlButton = new Button { Text = "Open URL", AutoSize = true };
+        duesOpenUrlButton.Click += (_, _) => OpenSelectedDueUrl();
         duesButtonPanel.Controls.Add(_markPaidButton);
         duesButtonPanel.Controls.Add(backfillButton);
+        duesButtonPanel.Controls.Add(duesOpenUrlButton);
 
         var duesTab = new TabPage("Dues");
         duesTab.Controls.Add(_duesListView);
@@ -836,7 +842,14 @@ public class MainForm : Form
     private void AddNew()
     {
         var entry = new AccountEntry();
-        using var form = new AccountEditForm(entry, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields);
+
+        // If a specific category is picked in the filter (not "All Categories"),
+        // start the new entry there instead of the generic "Other" default - saves
+        // re-picking the category you were already looking at.
+        if (_categoryFilter.SelectedItem is string selectedCategory && selectedCategory != AllCategoriesLabel)
+            entry.Category = selectedCategory;
+
+        using var form = new AccountEditForm(entry, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields, isNewEntry: true);
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             _vault.Accounts.Add(entry);
@@ -907,6 +920,31 @@ public class MainForm : Form
         }
     }
 
+    /// <summary>Same as OpenSelectedUrl, but for whatever's selected on the Dues tab instead of the Accounts tab.</summary>
+    private void OpenSelectedDueUrl()
+    {
+        if (_duesListView.SelectedItems.Count == 0) return;
+        var account = (AccountEntry)_duesListView.SelectedItems[0].Tag!;
+
+        var uri = BrowserLauncher.TryParseUrl(account.Website);
+        if (uri == null)
+        {
+            MessageBox.Show(this, "This account doesn't have a valid website URL set.", "Personal Vault",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        try
+        {
+            BrowserLauncher.Open(uri, _getDefaultBrowserPath());
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, "Could not open that website: " + ex.Message, "Personal Vault",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
     private void CopyField(Func<AccountEntry, string> selector, string label)
     {
         var account = SelectedAccount();
@@ -918,8 +956,7 @@ public class MainForm : Form
         Clipboard.SetText(value);
         ScheduleClipboardClear(value);
 
-        MessageBox.Show(this, $"{label} copied to clipboard. It will clear automatically in 20 seconds.",
-            "Personal Vault", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        _notify("Personal Vault", $"{label} copied to clipboard - clears automatically in 20 seconds.");
     }
 
     /// <summary>Opens the Share Account dialog for the selected account - see ShareAccountForm / TrayApplicationContext.ShareAccountAsync.</summary>

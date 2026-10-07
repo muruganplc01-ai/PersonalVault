@@ -16,6 +16,7 @@ public class AccountEditForm : Form
     private readonly string? _defaultBrowserPath;
     private readonly Func<string, string[]?>? _getCustomCategoryFields;
     private readonly Action<string, string[]>? _saveCustomCategoryFields;
+    private readonly bool _isNewEntry;
 
     private const string CreditCardCategory = "CreditCard";
     private const string BankAccountCategory = "BankAccount";
@@ -66,6 +67,8 @@ public class AccountEditForm : Form
     // the dialog instead of starting a new line.
     private readonly TextBox _notesBox = new() { Dock = DockStyle.Fill, Multiline = true, Height = 55, ScrollBars = ScrollBars.Vertical, AcceptsReturn = true };
     private readonly TextBox _extraFieldsBox = new() { Dock = DockStyle.Fill, Multiline = true, Height = 70, ScrollBars = ScrollBars.Vertical, AcceptsReturn = true };
+    private readonly Button _expandNotesButton = new() { Text = "⤢", AutoSize = true, Margin = new Padding(4, 0, 0, 0) };
+    private readonly Button _expandExtraFieldsButton = new() { Text = "⤢", AutoSize = true, Margin = new Padding(4, 0, 0, 0) };
 
     /// <summary>
     /// knownCategories is every category currently in use across the vault (plus the
@@ -80,13 +83,15 @@ public class AccountEditForm : Form
         string? defaultBrowserPath = null,
         IEnumerable<string>? knownCategories = null,
         Func<string, string[]?>? getCustomCategoryFields = null,
-        Action<string, string[]>? saveCustomCategoryFields = null)
+        Action<string, string[]>? saveCustomCategoryFields = null,
+        bool isNewEntry = false)
     {
         _entry = entry;
         _defaultOwnerName = defaultOwnerName;
         _defaultBrowserPath = defaultBrowserPath;
         _getCustomCategoryFields = getCustomCategoryFields;
         _saveCustomCategoryFields = saveCustomCategoryFields;
+        _isNewEntry = isNewEntry;
 
         Text = "Account Details";
         Width = 540;
@@ -95,6 +100,10 @@ public class AccountEditForm : Form
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
+        // F10 (or the ⤢ buttons next to Notes/Extra info) pops whichever one has focus
+        // out into a full-size editor - see OpenExpandedEditor. KeyPreview so the form
+        // sees F10 before any individual control would otherwise consume/ignore it.
+        KeyPreview = true;
 
         var categoryItems = knownCategories?.Where(c => !string.IsNullOrWhiteSpace(c))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -197,8 +206,19 @@ public class AccountEditForm : Form
         AddRow(layout, ref row, "Current balance:", balancePanel);
         AddRow(layout, ref row, "", _importBalanceButton);
 
-        AddRow(layout, ref row, "Notes:", _notesBox);
-        AddRow(layout, ref row, "Extra info:\n(key=value,\none per line)", _extraFieldsBox);
+        var notesPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoSize = true };
+        notesPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        notesPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        notesPanel.Controls.Add(_notesBox, 0, 0);
+        notesPanel.Controls.Add(_expandNotesButton, 1, 0);
+        AddRow(layout, ref row, "Notes:", notesPanel);
+
+        var extraFieldsPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoSize = true };
+        extraFieldsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        extraFieldsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        extraFieldsPanel.Controls.Add(_extraFieldsBox, 0, 0);
+        extraFieldsPanel.Controls.Add(_expandExtraFieldsButton, 1, 0);
+        AddRow(layout, ref row, "Extra info:\n(key=value,\none per line)", extraFieldsPanel);
 
         var buttonPanel = new FlowLayoutPanel
         {
@@ -224,8 +244,19 @@ public class AccountEditForm : Form
         {
             UpdateCardDetailsVisibility();
             UpdateBankAccountsVisibility();
+            if (_isNewEntry) ApplyCategoryDefaults();
         };
         _openWebsiteButton.Click += (_, _) => OpenWebsite();
+        _expandNotesButton.Click += (_, _) => OpenExpandedEditor(_notesBox, "Notes");
+        _expandExtraFieldsButton.Click += (_, _) => OpenExpandedEditor(_extraFieldsBox, "Extra Info");
+        KeyDown += (_, e) =>
+        {
+            if (e.KeyCode != Keys.F10) return;
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            OpenExpandedEditor(_extraFieldsBox.Focused ? _extraFieldsBox : _notesBox,
+                _extraFieldsBox.Focused ? "Extra Info" : "Notes");
+        };
         _hasAmountDueBox.CheckedChanged += (_, _) => _amountDueBox.Enabled = _hasAmountDueBox.Checked;
         _hasBalanceBox.CheckedChanged += (_, _) =>
         {
@@ -244,6 +275,72 @@ public class AccountEditForm : Form
         CancelButton = cancelButton;
 
         LoadFromEntry();
+        if (_isNewEntry) ApplyCategoryDefaults();
+    }
+
+    /// <summary>
+    /// Pre-fills Repeats/Autopay with sensible starting values for the selected
+    /// category (Models/AccountEntry.cs -> CategoryEntryDefaults) - only called while
+    /// adding a brand-new entry, never while editing an existing one, so nothing here
+    /// ever overwrites a value someone already set deliberately.
+    /// </summary>
+    private void ApplyCategoryDefaults()
+    {
+        var categoryText = _categoryBox.SelectedItem as string;
+        var defaults = CategoryEntryDefaults.For(categoryText);
+        if (defaults == null) return;
+
+        _recurrenceBox.SelectedItem = defaults.Value.Recurrence.ToString();
+        _autoPaymentBox.Checked = defaults.Value.Autopay;
+    }
+
+    /// <summary>
+    /// Pops a single multiline field (Notes or Extra info) out into a bigger, resizable
+    /// window - triggered by its ⤢ button or by pressing F10 while that field has
+    /// focus. Edits only take effect on this popup's own OK; Cancel discards them, same
+    /// as everything else in this form not taking effect until the outer Save.
+    /// </summary>
+    private void OpenExpandedEditor(TextBox sourceBox, string title)
+    {
+        using var dialog = new Form
+        {
+            Text = title,
+            Width = 640,
+            Height = 480,
+            StartPosition = FormStartPosition.CenterParent,
+            MinimumSize = new Size(360, 240)
+        };
+
+        var textBox = new TextBox
+        {
+            Dock = DockStyle.Fill,
+            Multiline = true,
+            ScrollBars = ScrollBars.Vertical,
+            AcceptsReturn = true,
+            AcceptsTab = true,
+            Font = new Font("Consolas", 10),
+            Text = sourceBox.Text
+        };
+
+        var buttonPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Bottom,
+            Height = 44,
+            FlowDirection = FlowDirection.RightToLeft,
+            Padding = new Padding(10)
+        };
+        var cancelButton = new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel };
+        var okButton = new Button { Text = "OK", AutoSize = true, DialogResult = DialogResult.OK };
+        buttonPanel.Controls.Add(cancelButton);
+        buttonPanel.Controls.Add(okButton);
+
+        dialog.Controls.Add(textBox);
+        dialog.Controls.Add(buttonPanel);
+        dialog.AcceptButton = okButton;
+        dialog.CancelButton = cancelButton;
+
+        if (dialog.ShowDialog(this) == DialogResult.OK)
+            sourceBox.Text = textBox.Text;
     }
 
     private static void AddRow(TableLayoutPanel layout, ref int row, string label, Control control)

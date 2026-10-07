@@ -91,6 +91,19 @@ public class UnlockForm : Form
         Controls.Add(_okButton);
 
         AcceptButton = _okButton;
+
+        // Without this, the secret box sometimes doesn't actually have keyboard focus
+        // when this dialog appears after the app was sitting idle in the tray (Windows
+        // can decline to hand focus to a background process's new window) - forcing
+        // TopMost briefly is what actually gets Windows to bring it to the foreground
+        // reliably, not just Activate() alone.
+        Shown += (_, _) =>
+        {
+            TopMost = true;
+            Activate();
+            TopMost = false;
+            _secretBox.Focus();
+        };
     }
 
     private void OkButton_Click(object? sender, EventArgs e)

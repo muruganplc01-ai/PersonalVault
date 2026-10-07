@@ -24,6 +24,8 @@ public enum RecurrenceType
     Weekly,
     Monthly,
     Quarterly,
+    /// <summary>Every 6 months - e.g. property tax billed in two installments a year (March/September).</summary>
+    SemiAnnual,
     Yearly
 }
 
@@ -59,6 +61,35 @@ public static class CategoryFieldSpec
         !string.IsNullOrWhiteSpace(category) && SuggestedFields.TryGetValue(category, out var fields)
             ? fields
             : Array.Empty<string>();
+}
+
+/// <summary>
+/// Suggested Repeats/Autopay defaults per category, applied by AccountEditForm only
+/// while adding a brand-new entry (never overwrites an existing entry's own values on
+/// edit) - purely a convenience so e.g. a new CreditCard entry doesn't start at
+/// "Repeats: None" when it's almost always monthly. Anything not listed here (or a
+/// custom category) just keeps the form's normal None/unchecked defaults - these are
+/// starting points, not requirements, and can be changed freely before Save.
+/// </summary>
+public static class CategoryEntryDefaults
+{
+    public static readonly IReadOnlyDictionary<string, (RecurrenceType Recurrence, bool Autopay)> Defaults =
+        new Dictionary<string, (RecurrenceType, bool)>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["CreditCard"] = (RecurrenceType.Monthly, false),
+            ["Mortgage"] = (RecurrenceType.Monthly, false),
+            ["CarLoan"] = (RecurrenceType.Monthly, false),
+            ["Utility"] = (RecurrenceType.Monthly, false),
+            ["Membership"] = (RecurrenceType.Yearly, false),
+            ["Insurance"] = (RecurrenceType.Monthly, false),
+            ["HomeTax"] = (RecurrenceType.SemiAnnual, false),
+            ["ApartmentRental"] = (RecurrenceType.Monthly, false),
+        };
+
+    public static (RecurrenceType Recurrence, bool Autopay)? For(string? category) =>
+        !string.IsNullOrWhiteSpace(category) && Defaults.TryGetValue(category, out var defaults)
+            ? defaults
+            : null;
 }
 
 /// <summary>

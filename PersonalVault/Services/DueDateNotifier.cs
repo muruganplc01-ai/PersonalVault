@@ -95,6 +95,7 @@ public class DueDateNotifier : IDisposable
         RecurrenceType.Weekly => date.AddDays(7),
         RecurrenceType.Monthly => date.AddMonths(1),
         RecurrenceType.Quarterly => date.AddMonths(3),
+        RecurrenceType.SemiAnnual => date.AddMonths(6),
         RecurrenceType.Yearly => date.AddYears(1),
         _ => date
     };
@@ -113,6 +114,7 @@ public class DueDateNotifier : IDisposable
         RecurrenceType.Weekly => date.AddDays(-7),
         RecurrenceType.Monthly => date.AddMonths(-1),
         RecurrenceType.Quarterly => date.AddMonths(-3),
+        RecurrenceType.SemiAnnual => date.AddMonths(-6),
         RecurrenceType.Yearly => date.AddYears(-1),
         _ => date.AddMonths(-1)
     };
