@@ -102,13 +102,18 @@ This is a working v2 - see "What's next" below for what's still just an idea.
 - **Clipboard auto-clear**: after copying a username or password, the clipboard clears
   itself automatically about 20 seconds later (only if you haven't copied something
   else in the meantime).
-- **Rolling Drive backups**: each successful sync pins the revision it just uploaded
-  and prunes anything older than a rolling 7 days, using Google Drive's own revision
-  history - time-based rather than a fixed count, so several saves in one day can't
-  crowd out a version from earlier in the week. An accidental delete, a bad edit, or a
-  botched sync has up to a week of history to recover from (via Drive's web UI →
-  right-click the file → "Manage versions"). This is best-effort and never blocks or
-  fails a sync.
+- **Rolling Drive backups**: before every upload that would overwrite the existing
+  Drive file, it's first copied to a plain, ordinary-looking dated file right alongside
+  it - e.g. `PersonalVaultData-backup-2026-10-07-171053.pvlt` - so recovering an older
+  version is just finding that file in your Drive file list, no "Manage versions" UI to
+  dig through. On top of that, each sync also pins the revision it just uploaded in
+  Drive's own internal revision history as a second line of defense. Both are pruned on
+  a rolling 7-day window (time-based, not a fixed count, so several saves in one day
+  can't crowd out a version from earlier in the week) and are both best-effort - never
+  block or fail a sync. The local vault file gets the same treatment in the other
+  direction: anytime a Drive download is about to overwrite it (a restore, or Drive
+  turning out to be newer), the current local file is copied first to
+  `<data folder>\backup\vault-<timestamp>.pvlt`, same 7-day window.
 - **Share an account (real one-time link)**: click **Share...** in the account list
   window to send one account to someone who doesn't use Personal Vault at all - no app,
   no account, no sign-in on their end. Pick how long the link stays live if nobody

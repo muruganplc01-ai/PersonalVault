@@ -241,6 +241,8 @@ public class GoogleDriveSync
 
             if (!string.IsNullOrEmpty(existingFileId))
             {
+                await BackupBeforeOverwriteAsync(existingFileId);
+
                 DebugLog.Write("UploadOrUpdateAsync: updating existing Drive file...");
                 var updateRequest = _service!.Files.Update(new DriveFile(), existingFileId, stream, "application/octet-stream");
                 var progress = await updateRequest.UploadAsync();
@@ -277,6 +279,76 @@ public class GoogleDriveSync
         {
             DebugLog.WriteException("UploadOrUpdateAsync", ex);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Copies the current Drive file to a dated, ordinary filename (e.g.
+    /// "PersonalVaultData-backup-2026-10-07-171053.pvlt") before it gets overwritten by
+    /// the update that follows. Unlike Drive's internal revision history
+    /// (PruneOldRevisionsAsync, reachable only through "Manage versions" - which turned
+    /// out hard to find in practice), this shows up as a plain file in Drive's own
+    /// listing, nothing to dig for. Best-effort: a failure here must never block the
+    /// actual upload it's protecting.
+    /// </summary>
+    private async Task BackupBeforeOverwriteAsync(string existingFileId)
+    {
+        try
+        {
+            var fileRequest = _service!.Files.Get(existingFileId);
+            fileRequest.Fields = "name";
+            var file = await fileRequest.ExecuteAsync();
+
+            string baseName = string.IsNullOrEmpty(file.Name) ? RemoteFileName : file.Name;
+            string nameNoExt = Path.GetFileNameWithoutExtension(baseName);
+            string ext = Path.GetExtension(baseName);
+            string stamp = DateTime.Now.ToString("yyyy-MM-dd-HHmmss");
+            string backupName = $"{nameNoExt}-backup-{stamp}{ext}";
+
+            var copyRequest = _service.Files.Copy(new DriveFile { Name = backupName }, existingFileId);
+            await copyRequest.ExecuteAsync();
+            DebugLog.Write($"BackupBeforeOverwriteAsync: copied '...{Suffix(existingFileId)}' to dated backup '{backupName}'.");
+
+            await PruneOldDatedBackupsAsync(nameNoExt);
+        }
+        catch (Exception ex)
+        {
+            // See doc comment - this is a safety net on top of the real upload, never a
+            // reason to block it.
+            DebugLog.WriteException("BackupBeforeOverwriteAsync (non-fatal)", ex);
+        }
+    }
+
+    /// <summary>
+    /// Deletes dated backup copies (see BackupBeforeOverwriteAsync) older than 7 days
+    /// for the given base file name - same rolling window as PruneOldRevisionsAsync and
+    /// the local backup folder (TrayApplicationContext.BackupLocalVaultBeforeOverwrite),
+    /// so local history, Drive's visible dated copies, and Drive's internal revision
+    /// history all cover the same span.
+    /// </summary>
+    private async Task PruneOldDatedBackupsAsync(string nameNoExt, int retainDays = 7)
+    {
+        var listRequest = _service!.Files.List();
+        listRequest.Q = $"name contains '{nameNoExt}-backup-' and trashed = false";
+        listRequest.Fields = "files(id, name, createdTimeRaw)";
+        var result = await listRequest.ExecuteAsync();
+
+        var cutoffUtc = DateTimeOffset.UtcNow.AddDays(-retainDays);
+        var toPrune = (result.Files ?? new List<DriveFile>())
+            .Where(f => !string.IsNullOrEmpty(f.CreatedTimeRaw))
+            .Where(f => DateTimeOffset.TryParse(f.CreatedTimeRaw, out var created) && created < cutoffUtc)
+            .ToList();
+
+        DebugLog.Write($"PruneOldDatedBackupsAsync: found {result.Files?.Count ?? 0} dated backup(s) for '{nameNoExt}', pruning {toPrune.Count} older than {retainDays} day(s).");
+
+        foreach (var old in toPrune)
+        {
+            try { await _service.Files.Delete(old.Id).ExecuteAsync(); }
+            catch (Exception ex)
+            {
+                // best-effort - a failed prune just costs a bit more Drive storage, nothing breaks
+                DebugLog.WriteException($"PruneOldDatedBackupsAsync (delete '{old.Name}')", ex);
+            }
         }
     }
 

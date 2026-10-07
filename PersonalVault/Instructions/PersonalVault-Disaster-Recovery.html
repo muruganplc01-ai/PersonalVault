@@ -152,8 +152,12 @@
     <h2>The one thing that makes this possible</h2>
     <p style="margin:0;">
       <b>Google Drive sync is your backup.</b> Every save uploads the encrypted
-      <code>vault.pvlt</code> to your own Drive, and Drive keeps a rolling 7 days of
-      revision history on top of that (time-based, not a fixed count - several saves in
+      <code>vault.pvlt</code> to your own Drive — and just before that upload
+      overwrites the existing file, it's copied first to a plain, dated file right next
+      to it (e.g. <code>PersonalVaultData-backup-2026-10-07-171053.pvlt</code>), so an
+      older version is just another file in your normal Drive listing — no "Manage
+      versions" menu to go hunting through. Both that and Drive's own internal revision
+      history cover a rolling 7 days (time-based, not a fixed count - several saves in
       one day won't crowd out a version from earlier in the week). If Drive sync was
       never turned on for this vault,
       there is nothing to recover — the vault only ever existed on the one machine that
