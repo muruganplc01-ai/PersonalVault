@@ -16,6 +16,7 @@ public class AccountEditForm : Form
     private readonly string? _defaultBrowserPath;
     private readonly Func<string, string[]?>? _getCustomCategoryFields;
     private readonly Action<string, string[]>? _saveCustomCategoryFields;
+    private readonly Func<string, CategoryDefault?>? _getCustomCategoryDefault;
     private readonly bool _isNewEntry;
 
     private const string CreditCardCategory = "CreditCard";
@@ -84,7 +85,8 @@ public class AccountEditForm : Form
         IEnumerable<string>? knownCategories = null,
         Func<string, string[]?>? getCustomCategoryFields = null,
         Action<string, string[]>? saveCustomCategoryFields = null,
-        bool isNewEntry = false)
+        bool isNewEntry = false,
+        Func<string, CategoryDefault?>? getCustomCategoryDefault = null)
     {
         _entry = entry;
         _defaultOwnerName = defaultOwnerName;
@@ -92,6 +94,7 @@ public class AccountEditForm : Form
         _getCustomCategoryFields = getCustomCategoryFields;
         _saveCustomCategoryFields = saveCustomCategoryFields;
         _isNewEntry = isNewEntry;
+        _getCustomCategoryDefault = getCustomCategoryDefault;
 
         Text = "Account Details";
         Width = 540;
@@ -279,19 +282,35 @@ public class AccountEditForm : Form
     }
 
     /// <summary>
-    /// Pre-fills Repeats/Autopay with sensible starting values for the selected
-    /// category (Models/AccountEntry.cs -> CategoryEntryDefaults) - only called while
-    /// adding a brand-new entry, never while editing an existing one, so nothing here
-    /// ever overwrites a value someone already set deliberately.
+    /// Pre-fills Repeats/Autopay/Institution with sensible starting values for the
+    /// selected category (Models/AccountEntry.cs -> CategoryEntryDefaults) - only
+    /// called while adding a brand-new entry, never while editing an existing one, so
+    /// nothing here ever overwrites a value someone already set deliberately.
     /// </summary>
     private void ApplyCategoryDefaults()
     {
         var categoryText = _categoryBox.SelectedItem as string;
+        if (string.IsNullOrWhiteSpace(categoryText)) return;
+
+        // Vault-specific, user-configured defaults (Profile -> "Category Defaults...")
+        // take priority over the hardcoded built-in ones for the same category.
+        var custom = _getCustomCategoryDefault?.Invoke(categoryText);
+        if (custom != null)
+        {
+            _recurrenceBox.SelectedItem = custom.Recurrence.ToString();
+            _autoPaymentBox.Checked = custom.Autopay;
+            if (!string.IsNullOrEmpty(custom.Institution))
+                _institutionBox.Text = custom.Institution;
+            return;
+        }
+
         var defaults = CategoryEntryDefaults.For(categoryText);
         if (defaults == null) return;
 
         _recurrenceBox.SelectedItem = defaults.Value.Recurrence.ToString();
         _autoPaymentBox.Checked = defaults.Value.Autopay;
+        if (defaults.Value.Institution != null)
+            _institutionBox.Text = defaults.Value.Institution;
     }
 
     /// <summary>

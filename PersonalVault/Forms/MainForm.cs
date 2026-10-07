@@ -602,7 +602,7 @@ public class MainForm : Form
         if (_balancesListView.SelectedItems.Count == 0) return;
         var account = (AccountEntry)_balancesListView.SelectedItems[0].Tag!;
 
-        using var form = new AccountEditForm(account, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields);
+        using var form = new AccountEditForm(account, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields, getCustomCategoryDefault: GetCategoryDefault);
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             account.ModifiedUtc = DateTime.UtcNow;
@@ -825,6 +825,25 @@ public class MainForm : Form
         _save();
     }
 
+    /// <summary>
+    /// Looks up a user-configured category default (Profile -> "Category Defaults...",
+    /// see VaultData.CustomCategoryDefaults) - matched case-insensitively, same
+    /// reasoning as GetCustomCategoryFields above. Checked by AccountEditForm before
+    /// falling back to the hardcoded built-in CategoryEntryDefaults.
+    /// </summary>
+    private CategoryDefault? GetCategoryDefault(string category) =>
+        _vault.CustomCategoryDefaults
+            .FirstOrDefault(kv => string.Equals(kv.Key, category, StringComparison.OrdinalIgnoreCase))
+            .Value;
+
+    /// <summary>Profile's "Category Defaults..." button - lets you manage CustomCategoryDefaults yourself instead of editing code.</summary>
+    private void OpenCategoryDefaults()
+    {
+        using var form = new CategoryDefaultsForm(_vault.CustomCategoryDefaults, KnownCategories());
+        if (form.ShowDialog(this) == DialogResult.OK)
+            _save();
+    }
+
     /// <summary>Full-text-ish search across every field a person might actually remember about an account, including extra fields.</summary>
     private static bool MatchesSearch(AccountEntry a, string query)
     {
@@ -849,7 +868,7 @@ public class MainForm : Form
         if (_categoryFilter.SelectedItem is string selectedCategory && selectedCategory != AllCategoriesLabel)
             entry.Category = selectedCategory;
 
-        using var form = new AccountEditForm(entry, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields, isNewEntry: true);
+        using var form = new AccountEditForm(entry, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields, isNewEntry: true, getCustomCategoryDefault: GetCategoryDefault);
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             _vault.Accounts.Add(entry);
@@ -865,7 +884,7 @@ public class MainForm : Form
         var account = SelectedAccount();
         if (account == null) return;
 
-        using var form = new AccountEditForm(account, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields);
+        using var form = new AccountEditForm(account, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields, getCustomCategoryDefault: GetCategoryDefault);
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             account.ModifiedUtc = DateTime.UtcNow;
@@ -1056,7 +1075,7 @@ public class MainForm : Form
 
     private void EditProfile()
     {
-        using var form = new ProfileForm(_vault.Profile, _getDefaultBrowserPath(), _getGitHubUsername(), _changeMasterSecret, _getDataFolder(), _changeDataFolder, _openMfaSetup);
+        using var form = new ProfileForm(_vault.Profile, _getDefaultBrowserPath(), _getGitHubUsername(), _changeMasterSecret, _getDataFolder(), _changeDataFolder, _openMfaSetup, OpenCategoryDefaults);
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             _setDefaultBrowserPath(form.SelectedBrowserPath);

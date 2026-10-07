@@ -23,4 +23,14 @@ public class VaultData
     /// deserialization always rebuilds it with the default comparer.
     /// </summary>
     public Dictionary<string, string[]> CustomCategoryFields { get; set; } = new();
+
+    /// <summary>
+    /// User-configured Repeats/Autopay/Institution defaults per category - see Profile
+    /// -> "Category Defaults...". Distinct from the hardcoded, built-in
+    /// Models/AccountEntry.cs -> CategoryEntryDefaults: these are vault-specific and
+    /// editable without a rebuild, and take priority over the built-in ones when both
+    /// exist for the same category. Keys matched case-insensitively in code, same
+    /// reasoning as CustomCategoryFields above.
+    /// </summary>
+    public Dictionary<string, CategoryDefault> CustomCategoryDefaults { get; set; } = new();
 }

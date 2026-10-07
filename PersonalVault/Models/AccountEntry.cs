@@ -64,32 +64,51 @@ public static class CategoryFieldSpec
 }
 
 /// <summary>
-/// Suggested Repeats/Autopay defaults per category, applied by AccountEditForm only
-/// while adding a brand-new entry (never overwrites an existing entry's own values on
-/// edit) - purely a convenience so e.g. a new CreditCard entry doesn't start at
-/// "Repeats: None" when it's almost always monthly. Anything not listed here (or a
-/// custom category) just keeps the form's normal None/unchecked defaults - these are
-/// starting points, not requirements, and can be changed freely before Save.
+/// Suggested Repeats/Autopay/Institution defaults per category, applied by
+/// AccountEditForm only while adding a brand-new entry (never overwrites an existing
+/// entry's own values on edit) - purely a convenience so e.g. a new CreditCard entry
+/// doesn't start at "Repeats: None" when it's almost always monthly, or a "Work"
+/// category always fills in the same employer/vendor name. Institution is null for
+/// anything that doesn't have one obvious fixed value - leave it null rather than
+/// guessing. Anything not listed here (or a custom category) just keeps the form's
+/// normal blank/None/unchecked defaults - these are starting points, not requirements,
+/// and can be changed freely before Save.
 /// </summary>
 public static class CategoryEntryDefaults
 {
-    public static readonly IReadOnlyDictionary<string, (RecurrenceType Recurrence, bool Autopay)> Defaults =
-        new Dictionary<string, (RecurrenceType, bool)>(StringComparer.OrdinalIgnoreCase)
+    public static readonly IReadOnlyDictionary<string, (RecurrenceType Recurrence, bool Autopay, string? Institution)> Defaults =
+        new Dictionary<string, (RecurrenceType, bool, string?)>(StringComparer.OrdinalIgnoreCase)
         {
-            ["CreditCard"] = (RecurrenceType.Monthly, false),
-            ["Mortgage"] = (RecurrenceType.Monthly, false),
-            ["CarLoan"] = (RecurrenceType.Monthly, false),
-            ["Utility"] = (RecurrenceType.Monthly, false),
-            ["Membership"] = (RecurrenceType.Yearly, false),
-            ["Insurance"] = (RecurrenceType.Monthly, false),
-            ["HomeTax"] = (RecurrenceType.SemiAnnual, false),
-            ["ApartmentRental"] = (RecurrenceType.Monthly, false),
+            ["CreditCard"] = (RecurrenceType.Monthly, false, null),
+            ["Mortgage"] = (RecurrenceType.Monthly, false, null),
+            ["CarLoan"] = (RecurrenceType.Monthly, false, null),
+            ["Utility"] = (RecurrenceType.Monthly, false, null),
+            ["Membership"] = (RecurrenceType.Yearly, false, null),
+            ["Insurance"] = (RecurrenceType.Monthly, false, null),
+            ["HomeTax"] = (RecurrenceType.SemiAnnual, false, null),
+            ["ApartmentRental"] = (RecurrenceType.Monthly, false, null),
+            ["Work"] = (RecurrenceType.None, false, "Porter Lee"),
         };
 
-    public static (RecurrenceType Recurrence, bool Autopay)? For(string? category) =>
+    public static (RecurrenceType Recurrence, bool Autopay, string? Institution)? For(string? category) =>
         !string.IsNullOrWhiteSpace(category) && Defaults.TryGetValue(category, out var defaults)
             ? defaults
             : null;
+}
+
+/// <summary>
+/// One category's Repeats/Autopay/Institution defaults, configured by hand in Profile
+/// -> "Category Defaults..." (Forms/CategoryDefaultsForm.cs) and stored in
+/// VaultData.CustomCategoryDefaults. Unlike the hardcoded CategoryEntryDefaults above,
+/// these are vault-specific, editable from the app without a rebuild, travel with the
+/// vault via Drive sync, and take priority over the built-in ones for the same
+/// category - see AccountEditForm.ApplyCategoryDefaults.
+/// </summary>
+public class CategoryDefault
+{
+    public RecurrenceType Recurrence { get; set; } = RecurrenceType.None;
+    public bool Autopay { get; set; }
+    public string? Institution { get; set; }
 }
 
 /// <summary>
