@@ -552,6 +552,7 @@ public class TrayApplicationContext : ApplicationContext
             {
                 _vault = VaultStorage.LoadFromBytes(remoteBytes, form.Secret);
                 _secret = form.Secret;
+                BackupLocalVaultBeforeOverwrite();
                 VaultStorage.SaveLocal(_vault, _secret);
 
                 if (!await VerifyMfaAsync())
@@ -568,6 +569,46 @@ public class TrayApplicationContext : ApplicationContext
                 MessageBox.Show("Incorrect secret for this backup. Please try again.", "Personal Vault",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+    }
+
+    /// <summary>
+    /// Copies whatever vault.pvlt currently exists locally into a dated backup file
+    /// before a Drive download is about to overwrite it - a download/restore always
+    /// wins the comparison it's part of, so without this, a locally-made change that
+    /// never made it to Drive (e.g. a sync that silently stopped working for a while)
+    /// could be silently discarded with no way back. Backups older than 7 days are
+    /// pruned on every call - same rolling window as GoogleDriveSync.PruneOldRevisionsAsync,
+    /// so local and Drive-side history cover the same span. Best-effort: a failure here
+    /// must never block the restore/sync it's protecting.
+    /// </summary>
+    private static void BackupLocalVaultBeforeOverwrite()
+    {
+        try
+        {
+            if (!File.Exists(AppPaths.VaultLocalPath)) return;
+
+            string backupFolder = Path.Combine(AppPaths.RootFolder, "backup");
+            Directory.CreateDirectory(backupFolder);
+
+            string stamp = DateTime.Now.ToString("yyyy-MM-dd-HHmmss");
+            string backupPath = Path.Combine(backupFolder, $"vault-{stamp}.pvlt");
+            File.Copy(AppPaths.VaultLocalPath, backupPath, overwrite: true);
+            DebugLog.Write($"BackupLocalVaultBeforeOverwrite: backed up current local vault to '{backupPath}'.");
+
+            var cutoff = DateTime.Now.AddDays(-7);
+            foreach (var old in Directory.GetFiles(backupFolder, "vault-*.pvlt"))
+            {
+                if (File.GetLastWriteTime(old) >= cutoff) continue;
+                try { File.Delete(old); }
+                catch (Exception ex) { DebugLog.WriteException($"BackupLocalVaultBeforeOverwrite (pruning '{old}')", ex); }
+            }
+        }
+        catch (Exception ex)
+        {
+            // See doc comment - this is a safety net on top of the real operation, never
+            // a reason to block it.
+            DebugLog.WriteException("BackupLocalVaultBeforeOverwrite (non-fatal)", ex);
         }
     }
 
@@ -1263,6 +1304,7 @@ public class TrayApplicationContext : ApplicationContext
                 {
                     DebugLog.Write("SyncNowAsync: local vault has zero accounts and Drive's copy has real data - pulling instead of comparing timestamps.");
                     _vault = remoteData;
+                    BackupLocalVaultBeforeOverwrite();
                     File.WriteAllBytes(AppPaths.VaultLocalPath, remoteBytesCheck);
                     _mainForm?.RefreshData(_vault);
                     _offeredEmptyVaultDriveRestoreThisSession = true;
@@ -1295,6 +1337,7 @@ public class TrayApplicationContext : ApplicationContext
             var bytes = await _drive.DownloadAsync(_driveFileId);
             var data = VaultStorage.LoadFromBytes(bytes, _secret!);
             _vault = data;
+            BackupLocalVaultBeforeOverwrite();
             File.WriteAllBytes(AppPaths.VaultLocalPath, bytes);
             _mainForm?.RefreshData(_vault);
             if (!silent) MessageBox.Show("Pulled the newer copy from Google Drive.", "Personal Vault");
