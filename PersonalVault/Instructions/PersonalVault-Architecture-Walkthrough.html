@@ -249,8 +249,9 @@ docs/share/
       <p><code>UploadToDriveAsync</code> → <code>GoogleDriveSync.UploadOrUpdateAsync</code>
       uploads the already-encrypted bytes as-is — Drive never receives plaintext at any
       point. <code>PruneOldRevisionsAsync</code> then pins the new revision and prunes
-      anything beyond the last 5, using Drive's own revision history as a rolling
-      backup.</p></div>
+      anything older than a rolling 7 days, using Drive's own revision history as a
+      backup — time-based rather than count-based, so a burst of saves in one day can't
+      crowd out an older revision from earlier in the week.</p></div>
   </div>
 
   <h2 class="section">6. One-time Share Account: the complete request path</h2>

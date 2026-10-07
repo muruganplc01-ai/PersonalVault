@@ -103,10 +103,12 @@ This is a working v2 - see "What's next" below for what's still just an idea.
   itself automatically about 20 seconds later (only if you haven't copied something
   else in the meantime).
 - **Rolling Drive backups**: each successful sync pins the revision it just uploaded
-  and prunes anything older than the last 5, using Google Drive's own revision
-  history - so an accidental delete, a bad edit, or a botched sync has a recent copy to
-  recover from (via Drive's web UI → right-click the file → "Manage versions"). This is
-  best-effort and never blocks or fails a sync.
+  and prunes anything older than a rolling 7 days, using Google Drive's own revision
+  history - time-based rather than a fixed count, so several saves in one day can't
+  crowd out a version from earlier in the week. An accidental delete, a bad edit, or a
+  botched sync has up to a week of history to recover from (via Drive's web UI →
+  right-click the file → "Manage versions"). This is best-effort and never blocks or
+  fails a sync.
 - **Share an account (real one-time link)**: click **Share...** in the account list
   window to send one account to someone who doesn't use Personal Vault at all - no app,
   no account, no sign-in on their end. Pick how long the link stays live if nobody

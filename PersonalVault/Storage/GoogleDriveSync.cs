@@ -345,18 +345,22 @@ public class GoogleDriveSync
     }
 
     /// <summary>
-    /// Keeps the vault file's last <paramref name="keep"/> revisions on Drive instead of
-    /// only the current one, so an accidental delete, a bad save, or a botched sync has
-    /// something to recover from. Uses Drive's own revision history (every update to the
-    /// file already creates one) - this just pins the newest one so it isn't silently
-    /// aged out by Drive's default retention, then prunes anything older than the last
-    /// <paramref name="keep"/>. Best-effort: any failure here is swallowed rather than
-    /// treated as a sync failure, since losing a rotation cycle is harmless.
+    /// Keeps a rolling <paramref name="retainDays"/> days of the vault file's revisions
+    /// on Drive instead of only the current one, so an accidental delete, a bad save, or
+    /// a botched sync has something to recover from. Time-based rather than count-based
+    /// on purpose - a burst of saves in one day (e.g. several app restarts) shouldn't
+    /// crowd out the one revision from three days ago that might actually be the one you
+    /// need, the way a fixed "keep the last N" count could. Uses Drive's own revision
+    /// history (every update to the file already creates one) - this just pins the
+    /// newest one so it isn't silently aged out by Drive's default retention, then prunes
+    /// anything older than <paramref name="retainDays"/> days. Best-effort: any failure
+    /// here is swallowed rather than treated as a sync failure, since losing a rotation
+    /// cycle is harmless.
     /// </summary>
-    public async Task PruneOldRevisionsAsync(string fileId, int keep = 5)
+    public async Task PruneOldRevisionsAsync(string fileId, int retainDays = 7)
     {
         RequireAuthenticated();
-        DebugLog.Write($"PruneOldRevisionsAsync: starting for file id '...{Suffix(fileId)}', keep={keep}.");
+        DebugLog.Write($"PruneOldRevisionsAsync: starting for file id '...{Suffix(fileId)}', retainDays={retainDays}.");
         try
         {
             var fileRequest = _service!.Files.Get(fileId);
@@ -386,16 +390,17 @@ public class GoogleDriveSync
             var revisions = await listRequest.ExecuteAsync();
             DebugLog.Write($"PruneOldRevisionsAsync: Drive reports {revisions.Revisions?.Count ?? 0} total revision(s).");
 
-            // RFC3339 UTC timestamps ("...Z") sort correctly as plain strings, so this
-            // avoids yet another version-sensitive typed date property (see
-            // GetRemoteModifiedTimeAsync above for why we've been burned by those before).
-            var newestFirst = revisions.Revisions
+            // Parsed from ModifiedTimeRaw (the API's raw RFC3339 string) rather than
+            // trusting the client library's own typed date property - see
+            // GetRemoteModifiedTimeAsync above for why we've been burned by those before.
+            // Parsing the raw string ourselves with DateTimeOffset.Parse is safe; it's
+            // the library's own pre-parsed property that's been the problem historically.
+            var cutoffUtc = DateTimeOffset.UtcNow.AddDays(-retainDays);
+            var toPrune = revisions.Revisions
                 .Where(r => !string.IsNullOrEmpty(r.ModifiedTimeRaw))
-                .OrderByDescending(r => r.ModifiedTimeRaw, StringComparer.Ordinal)
+                .Where(r => DateTimeOffset.TryParse(r.ModifiedTimeRaw, out var modified) && modified < cutoffUtc)
                 .ToList();
-
-            var toPrune = newestFirst.Skip(keep).ToList();
-            DebugLog.Write($"PruneOldRevisionsAsync: pruning {toPrune.Count} revision(s) beyond the newest {keep}.");
+            DebugLog.Write($"PruneOldRevisionsAsync: pruning {toPrune.Count} revision(s) older than {retainDays} day(s) (cutoff {cutoffUtc:O}).");
 
             foreach (var old in toPrune)
             {

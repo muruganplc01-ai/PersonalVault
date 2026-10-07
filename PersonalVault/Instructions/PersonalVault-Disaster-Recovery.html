@@ -152,8 +152,10 @@
     <h2>The one thing that makes this possible</h2>
     <p style="margin:0;">
       <b>Google Drive sync is your backup.</b> Every save uploads the encrypted
-      <code>vault.pvlt</code> to your own Drive, and Drive keeps the last 5 revisions as
-      a rolling history on top of that. If Drive sync was never turned on for this vault,
+      <code>vault.pvlt</code> to your own Drive, and Drive keeps a rolling 7 days of
+      revision history on top of that (time-based, not a fixed count - several saves in
+      one day won't crowd out a version from earlier in the week). If Drive sync was
+      never turned on for this vault,
       there is nothing to recover — the vault only ever existed on the one machine that
       held it, and losing that machine means losing the vault, by design (there is no
       other backend, no password reset, no company that holds a copy).
