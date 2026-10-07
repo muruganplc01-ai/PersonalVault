@@ -445,9 +445,11 @@ docs/share/
     <div class="callout note">
       <span class="icon">🛠️</span>
       <span>This repo's own <code>PersonalVault.csproj</code> currently has a local dev
-      convenience: <code>&lt;OutputPath&gt;C:\Personal\&lt;/OutputPath&gt;</code>. That's
-      one developer's machine-specific preference, not a project convention — worth
-      reviewing before anyone else builds from this repo.</span>
+      convenience: <code>&lt;OutputPath&gt;C:\Personal\build\&lt;/OutputPath&gt;</code>.
+      That's one developer's machine-specific preference, not a project convention —
+      worth reviewing before anyone else builds from this repo. Deliberately not
+      <code>C:\Personal\</code> itself, which is reserved for that developer's actual
+      installed app and its data folder.</span>
     </div>
   </div>
 

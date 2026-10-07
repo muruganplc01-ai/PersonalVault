@@ -21,8 +21,15 @@
     <Product>Personal Vault</Product>
     <ApplicationIcon>Resources\AppIcon.ico</ApplicationIcon>
 
-    <!-- Build output goes straight to C:\Personal instead of the default bin\Debug\<TFM>\ -->
-    <OutputPath>C:\Personal\</OutputPath>
+    <!--
+      Build output goes to C:\Personal\build instead of the default bin\Debug\<TFM>\.
+      Deliberately NOT C:\Personal itself - that's reserved for the actual installed
+      app + its data folder (C:\Personal\PersonalVault.exe and
+      C:\Personal\PersonalVault\), which must never get silently overwritten or have
+      its data folder picked up by a routine dev build. Promoting a build to that
+      "live" copy is a manual step.
+    -->
+    <OutputPath>C:\Personal\build\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>
