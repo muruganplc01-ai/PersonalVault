@@ -758,17 +758,8 @@ public class MainForm : Form
     /// </summary>
     private void RefreshCategoryFilterItems()
     {
-        var inUse = _vault.Accounts
-            .Select(a => a.Category)
-            .Where(c => !string.IsNullOrWhiteSpace(c));
-
-        var categories = AccountCategories.Defaults
-            .Union(inUse, StringComparer.OrdinalIgnoreCase)
-            .OrderBy(c => c, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
         var desired = new List<string> { AllCategoriesLabel };
-        desired.AddRange(categories);
+        desired.AddRange(KnownCategories());
 
         var current = _categoryFilter.Items.Cast<string>().ToArray();
         if (current.SequenceEqual(desired)) return;
@@ -789,11 +780,6 @@ public class MainForm : Form
         }
     }
 
-    /// <summary>
-    /// Every category currently known to the vault (built-in defaults plus any custom
-    /// ones already in use), for seeding the Category dropdown in a new/edited
-    /// account's Account Details dialog.
-    /// </summary>
     /// <summary>
     /// Every category "known" to this vault - the built-in defaults, whatever's
     /// actually in use on a saved account, plus any category that merely has a custom
