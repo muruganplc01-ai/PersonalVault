@@ -105,7 +105,13 @@ public class AccountEditForm : Form
     // rebuilt every category change by RebuildCustomFieldsPanel. Stored in
     // AccountEntry.ExtraFields keyed by caption, same as the reserved "Extra Info"
     // memo box - see SaveButton_Click for how the two are kept from clobbering each other.
-    private readonly FlowLayoutPanel _customFieldsPanel = new() { Dock = DockStyle.Top, FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false };
+    // A TableLayoutPanel (not a FlowLayoutPanel) with the same two columns as the main
+    // reserved-fields layout below - this is what makes a custom field's input box
+    // stretch to the same width and line up at the same left edge as every reserved
+    // field's input box. A FlowLayoutPanel was tried first; its flowed children don't
+    // stretch to the container's width, so a custom field's box rendered much
+    // narrower than everything else.
+    private readonly TableLayoutPanel _customFieldsPanel = new() { Dock = DockStyle.Top, ColumnCount = 2, AutoSize = true };
     private readonly Dictionary<string, Control> _customFieldControls = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
@@ -348,10 +354,16 @@ public class AccountEditForm : Form
         };
 
         _customFieldsPanel.Padding = new Padding(12, 0, 12, 0);
+        _customFieldsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
+        _customFieldsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
+        // Both panels are Dock = Top - among Top-docked siblings, WinForms gives the
+        // top-most slice to whichever control was added LAST, not first. _customFieldsPanel
+        // must therefore be added before layout, so layout (Category/Name/.../Extra Info)
+        // keeps the top of the form and the custom fields panel renders below it.
         var scrollPanel = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
-        scrollPanel.Controls.Add(layout);
         scrollPanel.Controls.Add(_customFieldsPanel);
+        scrollPanel.Controls.Add(layout);
 
         Controls.Add(scrollPanel);
         Controls.Add(buttonPanel);
@@ -453,10 +465,13 @@ public class AccountEditForm : Form
     private void RebuildCustomFieldsPanel(List<FieldDefinition> fieldSet)
     {
         _customFieldsPanel.Controls.Clear();
+        _customFieldsPanel.RowStyles.Clear();
+        _customFieldsPanel.RowCount = 0;
         _customFieldControls.Clear();
 
         var customFields = fieldSet.Where(f => !CategoryFieldSetDefaults.ReservedCaptions.Contains(f.Caption, StringComparer.OrdinalIgnoreCase));
 
+        int customRow = 0;
         foreach (var field in customFields)
         {
             _entry.ExtraFields.TryGetValue(field.Caption, out var existingValue);
@@ -492,12 +507,11 @@ public class AccountEditForm : Form
                 inputControl = textBox;
             }
 
-            var rowPanel = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 2, AutoSize = true };
-            rowPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
-            rowPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            rowPanel.Controls.Add(new Label { Text = field.Caption + ":", AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 6, 6, 0) }, 0, 0);
-            rowPanel.Controls.Add(valueControl, 1, 0);
-            _customFieldsPanel.Controls.Add(rowPanel);
+            _customFieldsPanel.RowCount = customRow + 1;
+            _customFieldsPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            _customFieldsPanel.Controls.Add(new Label { Text = field.Caption + ":", AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 6, 6, 0) }, 0, customRow);
+            _customFieldsPanel.Controls.Add(valueControl, 1, customRow);
+            customRow++;
 
             _customFieldControls[field.Caption] = inputControl;
         }
