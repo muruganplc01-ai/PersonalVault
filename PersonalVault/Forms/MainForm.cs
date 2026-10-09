@@ -234,6 +234,7 @@ public class MainForm : Form
             OwnerDraw = true
         };
         _listView.Columns.Add("Category", 130);
+        _listView.Columns.Add("Sub Category", 110);
         _listView.Columns.Add("Name", 170);
         _listView.Columns.Add("Institution", 140);
         _listView.Columns.Add("Owner", 110);
@@ -755,6 +756,7 @@ public class MainForm : Form
         foreach (var account in accounts.OrderBy(a => a.DueDate ?? DateTime.MaxValue))
         {
             var item = new ListViewItem(account.Category);
+            item.SubItems.Add(account.SubCategory);
             item.SubItems.Add(account.Name);
             item.SubItems.Add(account.Institution);
             item.SubItems.Add(account.Owner);
