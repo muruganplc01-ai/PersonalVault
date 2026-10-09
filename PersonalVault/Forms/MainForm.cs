@@ -41,6 +41,8 @@ public class MainForm : Form
     private readonly RadioButton _pastDueRadio;
     private readonly RadioButton _dueTodayRadio;
     private readonly RadioButton _dueInWeekRadio;
+    private readonly RadioButton _dueInMonthRadio;
+    private readonly RadioButton _dueInYearRadio;
     private readonly Button _markPaidButton;
     private readonly Label _duesTotalLabel;
 
@@ -295,13 +297,19 @@ public class MainForm : Form
         };
         _pastDueRadio = new RadioButton { Text = "Past Due", AutoSize = true, Checked = true, Padding = new Padding(0, 0, 16, 0) };
         _dueTodayRadio = new RadioButton { Text = "Due Today", AutoSize = true, Padding = new Padding(0, 0, 16, 0) };
-        _dueInWeekRadio = new RadioButton { Text = "Due In One Week", AutoSize = true };
+        _dueInWeekRadio = new RadioButton { Text = "Due In One Week", AutoSize = true, Padding = new Padding(0, 0, 16, 0) };
+        _dueInMonthRadio = new RadioButton { Text = "Due In One Month", AutoSize = true, Padding = new Padding(0, 0, 16, 0) };
+        _dueInYearRadio = new RadioButton { Text = "Due In One Year", AutoSize = true };
         _pastDueRadio.CheckedChanged += (_, _) => RefreshDuesList();
         _dueTodayRadio.CheckedChanged += (_, _) => RefreshDuesList();
         _dueInWeekRadio.CheckedChanged += (_, _) => RefreshDuesList();
+        _dueInMonthRadio.CheckedChanged += (_, _) => RefreshDuesList();
+        _dueInYearRadio.CheckedChanged += (_, _) => RefreshDuesList();
         duesFilterRow.Controls.Add(_pastDueRadio);
         duesFilterRow.Controls.Add(_dueTodayRadio);
         duesFilterRow.Controls.Add(_dueInWeekRadio);
+        duesFilterRow.Controls.Add(_dueInMonthRadio);
+        duesFilterRow.Controls.Add(_dueInYearRadio);
         _duesTotalLabel = new Label { AutoSize = true, Padding = new Padding(24, 3, 0, 0), ForeColor = Color.DimGray };
         duesFilterRow.Controls.Add(_duesTotalLabel);
 
@@ -486,6 +494,8 @@ public class MainForm : Form
     {
         var today = DateOnly.FromDateTime(DateTime.Now);
         var oneWeekOut = today.AddDays(7);
+        var oneMonthOut = today.AddMonths(1);
+        var oneYearOut = today.AddYears(1);
 
         IEnumerable<AccountEntry> accounts = _vault.Accounts.Where(a => a.DueDate.HasValue);
 
@@ -493,11 +503,23 @@ public class MainForm : Form
             accounts = accounts.Where(a => DateOnly.FromDateTime(a.DueDate!.Value) < today);
         else if (_dueTodayRadio.Checked)
             accounts = accounts.Where(a => DateOnly.FromDateTime(a.DueDate!.Value) == today);
-        else // Due In One Week - includes today through 7 days out
+        else if (_dueInWeekRadio.Checked) // includes today through 7 days out
             accounts = accounts.Where(a =>
             {
                 var due = DateOnly.FromDateTime(a.DueDate!.Value);
                 return due >= today && due <= oneWeekOut;
+            });
+        else if (_dueInMonthRadio.Checked) // includes today through 1 month out
+            accounts = accounts.Where(a =>
+            {
+                var due = DateOnly.FromDateTime(a.DueDate!.Value);
+                return due >= today && due <= oneMonthOut;
+            });
+        else // Due In One Year - includes today through 1 year out
+            accounts = accounts.Where(a =>
+            {
+                var due = DateOnly.FromDateTime(a.DueDate!.Value);
+                return due >= today && due <= oneYearOut;
             });
 
         // Most recent payment per account, so the list also answers "did I already pay
