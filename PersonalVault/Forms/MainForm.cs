@@ -929,22 +929,33 @@ public class MainForm : Form
     }
 
     /// <summary>Profile's "Category Defaults..." button - lets you manage CustomCategoryDefaults yourself instead of editing code.</summary>
+    /// <summary>
+    /// Deliberately does NOT call _save() here - this is only ever reachable from
+    /// Profile's "Category Defaults..." button, nested inside EditProfile(), which
+    /// already saves once when the outer Profile dialog itself closes with OK. Calling
+    /// _save() both here AND there, moments apart, caused a real crash: the second
+    /// save's File.Replace collided with the first save's still-in-flight (fire-and-
+    /// forget) Drive upload, which still had the local file open for reading. The
+    /// dictionary this form edits (_vault.CustomCategoryDefaults) is mutated directly by
+    /// reference regardless, so nothing here is lost - it's just not written to disk
+    /// until that one consolidated save happens.
+    /// </summary>
     private void OpenCategoryDefaults()
     {
         using var form = new CategoryDefaultsForm(_vault.CustomCategoryDefaults, KnownCategories());
-        if (form.ShowDialog(this) == DialogResult.OK)
-            _save();
+        form.ShowDialog(this);
     }
 
-    /// <summary>Profile's "Field Sets..." button - lets you choose which fields appear in Account Details per category, and in what order.</summary>
+    /// <summary>
+    /// Profile's "Field Sets..." button - lets you choose which fields appear in
+    /// Account Details per category, and in what order. Same "don't save here, Profile
+    /// does it once" reasoning as OpenCategoryDefaults above.
+    /// </summary>
     private void OpenCategoryFieldSets()
     {
         using var form = new CategoryFieldSetsForm(_vault.CategoryFieldSets, _vault.CustomCategoryBalanceTypes, KnownCategories());
         if (form.ShowDialog(this) == DialogResult.OK)
-        {
-            _save();
             ApplyFilter(); // a changed field set can change what's "known" - harmless/cheap to just refresh
-        }
     }
 
     /// <summary>Full-text-ish search across every field a person might actually remember about an account, including extra fields.</summary>
