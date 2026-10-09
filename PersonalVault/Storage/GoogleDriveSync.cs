@@ -340,7 +340,13 @@ public class GoogleDriveSync
     {
         var listRequest = _service!.Files.List();
         listRequest.Q = $"name contains '{nameNoExt}-backup-' and trashed = false";
-        listRequest.Fields = "files(id, name, createdTimeRaw)";
+        // "createdTime" is the real Drive API v3 field name - CreatedTimeRaw below is
+        // just the .NET client library's own property name for that same value
+        // (the unparsed ISO 8601 string), not a field the server recognizes; asking the
+        // API for "createdTimeRaw" by name made every prune attempt fail with a 400
+        // Bad Request ("Invalid field selection"), silently (it's caught as non-fatal),
+        // so dated Drive-side backups were never actually being cleaned up.
+        listRequest.Fields = "files(id, name, createdTime)";
         var result = await listRequest.ExecuteAsync();
 
         var cutoffUtc = DateTimeOffset.UtcNow.AddDays(-retainDays);
