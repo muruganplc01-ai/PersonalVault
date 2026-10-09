@@ -110,17 +110,20 @@ public class CategoryFieldSetsForm : Form
         _deleteButton = new Button { Text = "Delete", AutoSize = true, Enabled = false };
         _moveDownButton = new Button { Text = "Move Down", AutoSize = true, Enabled = false };
         _moveUpButton = new Button { Text = "Move Up", AutoSize = true, Enabled = false };
+        var resetButton = new Button { Text = "Reset to Default", AutoSize = true };
         addButton.Click += (_, _) => AddNew();
         _editButton.Click += (_, _) => EditSelected();
         _deleteButton.Click += (_, _) => DeleteSelected();
         _moveUpButton.Click += (_, _) => MoveSelected(-1);
         _moveDownButton.Click += (_, _) => MoveSelected(1);
+        resetButton.Click += (_, _) => ResetToDefault();
         buttonPanel.Controls.Add(closeButton);
         buttonPanel.Controls.Add(_deleteButton);
         buttonPanel.Controls.Add(_editButton);
         buttonPanel.Controls.Add(addButton);
         buttonPanel.Controls.Add(_moveDownButton);
         buttonPanel.Controls.Add(_moveUpButton);
+        buttonPanel.Controls.Add(resetButton);
 
         Controls.Add(_listView);
         Controls.Add(categoryRow);
@@ -229,6 +232,30 @@ public class CategoryFieldSetsForm : Form
         if (result != DialogResult.Yes) return;
 
         _workingFields.Remove(field);
+        RefreshList();
+    }
+
+    /// <summary>
+    /// Discards this category's vault-level override (if any) and reloads the true
+    /// built-in starting point instead - for when a built-in default has since been
+    /// improved (e.g. a new field added to it) but an existing override, even one that
+    /// was never deliberately customized, is shadowing that improvement. Not committed
+    /// until the category is switched away from or this form closes, same as every
+    /// other edit here.
+    /// </summary>
+    private void ResetToDefault()
+    {
+        if (_currentCategory == null) return;
+
+        var result = MessageBox.Show(this,
+            $"Reset \"{_currentCategory}\" to its built-in default field list? Any custom fields you added here for this category will be removed (their values on existing entries are kept, just hidden).",
+            "Personal Vault", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+        if (result != DialogResult.Yes) return;
+
+        _workingFields = CategoryFieldSetDefaults.Resolve(_currentCategory, new Dictionary<string, List<FieldDefinition>>())
+            .Select(f => new FieldDefinition { Caption = f.Caption, DataType = f.DataType, Size = f.Size })
+            .ToList();
+        _balanceTypeBox.SelectedItem = BalanceTypeUseDefault;
         RefreshList();
     }
 

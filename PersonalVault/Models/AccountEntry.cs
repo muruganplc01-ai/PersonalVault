@@ -219,6 +219,13 @@ public static class CategoryFieldSetDefaults
 
             ["Investment"] = Fields("Name", "Institution", "Owner", "Sub Category",
                 "Username", "Password", "Account #", "Website", "Phone", "Current Balance", "Notes", "Extra Info"),
+
+            // Sub Category is meant for Server/Database/Storage Container, etc.
+            // "IP Address" is a genuinely custom field (not one of the reserved
+            // captions) - rendered as a real text field and stored in ExtraFields,
+            // same as any other custom field defined from Profile -> "Field Sets...".
+            ["Azure"] = Fields("Name", "Institution", "Owner", "Sub Category",
+                "Username", "Password", "IP Address", "Website", "Phone", "Notes", "Extra Info"),
         };
 
     /// <summary>Vault-level override if present, else the built-in for this exact category, else [Defaults].</summary>
