@@ -66,12 +66,10 @@ public static class PaymentsStorage
         }
 
         // Write to a temp file and swap it in, same as VaultStorage - a crash or power
-        // loss mid-write can never leave payments.pvlt half-written / corrupt.
+        // loss mid-write can never leave payments.pvlt half-written / corrupt. AtomicFile
+        // tolerates a brief external lock (antivirus, indexer, etc.) landing on the swap.
         string tempPath = AppPaths.PaymentsLocalPath + ".tmp";
         File.WriteAllBytes(tempPath, blob);
-        if (File.Exists(AppPaths.PaymentsLocalPath))
-            File.Replace(tempPath, AppPaths.PaymentsLocalPath, null);
-        else
-            File.Move(tempPath, AppPaths.PaymentsLocalPath);
+        AtomicFile.ReplaceInto(tempPath, AppPaths.PaymentsLocalPath);
     }
 }

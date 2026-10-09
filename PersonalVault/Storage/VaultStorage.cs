@@ -57,12 +57,10 @@ public static class VaultStorage
         }
 
         // Write to a temp file and swap it in, so a crash or power loss mid-write can
-        // never leave vault.pvlt half-written / corrupt.
+        // never leave vault.pvlt half-written / corrupt. AtomicFile tolerates a brief
+        // external lock (antivirus, indexer, etc.) landing on the swap itself.
         string tempPath = AppPaths.VaultLocalPath + ".tmp";
         File.WriteAllBytes(tempPath, blob);
-        if (File.Exists(AppPaths.VaultLocalPath))
-            File.Replace(tempPath, AppPaths.VaultLocalPath, null);
-        else
-            File.Move(tempPath, AppPaths.VaultLocalPath);
+        AtomicFile.ReplaceInto(tempPath, AppPaths.VaultLocalPath);
     }
 }
