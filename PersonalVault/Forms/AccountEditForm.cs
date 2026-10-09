@@ -198,10 +198,12 @@ public class AccountEditForm : Form
         passwordPanel.Controls.Add(_generateButton, 2, 0);
         Track("Password", AddRow(layout, ref row, "Password:", passwordPanel), passwordPanel);
 
-        // Account # deliberately isn't part of the per-category field set - CreditCard's
-        // Card Details popup writes the card number directly into this same textbox
-        // regardless of category, so it always stays visible and always saves.
-        AddRow(layout, ref row, "Account #:", _accountNumberBox);
+        // Account # is hideable per category like everything else, but its Save is
+        // deliberately NEVER gated by that visibility (see SaveButton_Click) - CreditCard's
+        // Card Details popup writes the card number directly into this same textbox, and
+        // that value must never be silently lost no matter how a category's field set
+        // is configured later.
+        Track("Account #", AddRow(layout, ref row, "Account #:", _accountNumberBox), _accountNumberBox);
 
         // Only shown for the CreditCard category - see UpdateCardDetailsVisibility (and, as of
         // the per-category field set feature, ApplyFieldSetVisibility - the two work together:

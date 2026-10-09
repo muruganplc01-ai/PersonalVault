@@ -157,14 +157,15 @@ public static class CategoryFieldSetDefaults
     /// Captions that map to an existing control/group in AccountEditForm rather than
     /// being rendered generically. Order here is also the order they'd appear in if
     /// everything were enabled - BuiltInDefaults below reorders/omits per category.
-    /// "Account #" is deliberately not included here - CreditCard's Card Details popup
-    /// writes the card number directly into that textbox regardless of category, so it
-    /// always stays visible in AccountEditForm and always saves.
+    /// "Account #" hides/shows like any other field here, but its Save is deliberately
+    /// NEVER gated by that visibility (see AccountEditForm.SaveButton_Click) - CreditCard's
+    /// Card Details popup writes the card number directly into that textbox, and that
+    /// value must never be silently lost regardless of how a category's field set is configured.
     /// </summary>
     public static readonly string[] ReservedCaptions =
     {
         "Name", "Institution", "Owner", "Sub Category", "Username", "Password",
-        "Website", "Phone", "Due Date", "Amount Due", "Current Balance", "Asset Value",
+        "Account #", "Website", "Phone", "Due Date", "Amount Due", "Current Balance", "Asset Value",
         "Bank Accounts", "Card Details", "Notes", "Extra Info"
     };
 
@@ -190,7 +191,7 @@ public static class CategoryFieldSetDefaults
                 "Username", "Password", "Website", "Phone", "Bank Accounts", "Notes", "Extra Info"),
 
             ["CreditCard"] = Fields("Name", "Institution", "Owner", "Sub Category",
-                "Username", "Password", "Website", "Phone", "Card Details",
+                "Username", "Password", "Account #", "Website", "Phone", "Card Details",
                 "Due Date", "Amount Due", "Current Balance", "Notes", "Extra Info"),
 
             ["Mortgage"] = Fields("Name", "Institution", "Owner", "Sub Category",
@@ -217,7 +218,7 @@ public static class CategoryFieldSetDefaults
                 "Website", "Phone", "Due Date", "Amount Due", "Notes", "Extra Info"),
 
             ["Investment"] = Fields("Name", "Institution", "Owner", "Sub Category",
-                "Username", "Password", "Website", "Phone", "Current Balance", "Notes", "Extra Info"),
+                "Username", "Password", "Account #", "Website", "Phone", "Current Balance", "Notes", "Extra Info"),
         };
 
     /// <summary>Vault-level override if present, else the built-in for this exact category, else [Defaults].</summary>
