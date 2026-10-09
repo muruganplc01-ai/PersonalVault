@@ -54,6 +54,7 @@ public class TrayApplicationContext : ApplicationContext
     public TrayApplicationContext()
     {
         AppPaths.EnsureFoldersExist();
+        DebugLog.PreferenceEnabled = _settings.DebugLoggingEnabled;
 
         // Force the marshal control's handle to exist right away, on the UI thread,
         // so InvokeRequired in ShowMainForm() works correctly from the very first call
@@ -895,7 +896,9 @@ public class TrayApplicationContext : ApplicationContext
                 ChangeDataFolder,
                 OpenMfaSetup,
                 ShareAccountAsync,
-                (title, message) => Notify(title, message));
+                (title, message) => Notify(title, message),
+                GetDebugLoggingEnabled,
+                SetDebugLoggingEnabled);
             _mainForm.FormClosing += (_, e) =>
             {
                 // Closing the window just hides it - the app keeps running in the tray
@@ -1132,6 +1135,17 @@ public class TrayApplicationContext : ApplicationContext
     {
         DebugLog.Write($"SetDefaultBrowserPath: {(string.IsNullOrEmpty(path) ? "(cleared - back to system default)" : path)}.");
         _settings.DefaultBrowserPath = path;
+        SaveSettings();
+    }
+
+    /// <summary>Profile's "Enable diagnostic logging" checkbox - see AppSettings.DebugLoggingEnabled/Utils/DebugLog.cs.</summary>
+    private bool GetDebugLoggingEnabled() => _settings.DebugLoggingEnabled;
+
+    private void SetDebugLoggingEnabled(bool enabled)
+    {
+        DebugLog.Write($"SetDebugLoggingEnabled: {enabled}."); // logged before potentially turning itself off, so the change itself is always on record
+        _settings.DebugLoggingEnabled = enabled;
+        DebugLog.PreferenceEnabled = enabled;
         SaveSettings();
     }
 

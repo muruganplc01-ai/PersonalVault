@@ -50,6 +50,15 @@ public class AppSettings
     /// </summary>
     public int AutoLockMinutes { get; set; } = 10;
 
+    /// <summary>
+    /// Whether detailed save/sync activity gets written to a log file next to the app
+    /// (see Utils/DebugLog.cs) - set from the Profile form. Off by default, same as the
+    /// undocumented "drop a file named debug.txt next to the .exe" trick this supersedes
+    /// as the normal, visible way to turn it on - DebugLog.IsEnabled checks both this and
+    /// that same debug.txt trigger file, so either one turns logging on.
+    /// </summary>
+    public bool DebugLoggingEnabled { get; set; } = false;
+
     public static AppSettings Load()
     {
         try

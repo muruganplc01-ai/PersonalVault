@@ -45,6 +45,7 @@ public class ProfileForm : Form
     private readonly TextBox _browserPathBox = new() { Location = new Point(20, 268), Width = 250, ReadOnly = true };
     private readonly TextBox _gitHubUsernameBox = new() { Location = new Point(20, 350), Width = 250 };
     private readonly TextBox _dataFolderBox = new() { Location = new Point(20, 805), Width = 250, ReadOnly = true };
+    private readonly CheckBox _debugLoggingBox = new() { Text = "Enable diagnostic logging", AutoSize = true, Location = new Point(20, 945) };
 
     /// <summary>
     /// The chosen default-browser .exe path, or null to mean "use Windows' normal
@@ -57,6 +58,9 @@ public class ProfileForm : Form
 
     /// <summary>Same pattern as SelectedBrowserPath, for AppSettings.GitHubUsername.</summary>
     public string? GitHubUsername { get; private set; }
+
+    /// <summary>Same pattern as SelectedBrowserPath, for AppSettings.DebugLoggingEnabled.</summary>
+    public bool DebugLoggingEnabled { get; private set; }
 
     private readonly Func<Task>? _changeMasterSecret;
     private readonly Action<string>? _changeDataFolder;
@@ -83,7 +87,8 @@ public class ProfileForm : Form
         Action<string>? changeDataFolder = null,
         Action? openMfaSetup = null,
         Action? openCategoryDefaults = null,
-        Action? openCategoryFieldSets = null)
+        Action? openCategoryFieldSets = null,
+        bool currentDebugLoggingEnabled = false)
     {
         _profile = profile;
         _changeMasterSecret = changeMasterSecret;
@@ -94,7 +99,7 @@ public class ProfileForm : Form
 
         Text = "Your Profile";
         Width = 400;
-        Height = 1020;
+        Height = 1075;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MaximizeBox = false;
@@ -229,8 +234,20 @@ public class ProfileForm : Form
             ForeColor = Color.DimGray
         });
 
-        var cancelButton = new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel, Location = new Point(230, 925) };
-        var saveButton = new Button { Text = "Save", AutoSize = true, Location = new Point(315, 925) };
+        Controls.Add(new Label { Text = "Diagnostics:", AutoSize = true, Location = new Point(20, 925) });
+        Controls.Add(_debugLoggingBox);
+        Controls.Add(new Label
+        {
+            Text = "Saves activity to a log file next to the app, for troubleshooting.",
+            AutoSize = false,
+            Location = new Point(20, 968),
+            Width = 350,
+            Height = 30,
+            ForeColor = Color.DimGray
+        });
+
+        var cancelButton = new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel, Location = new Point(230, 1010) };
+        var saveButton = new Button { Text = "Save", AutoSize = true, Location = new Point(315, 1010) };
         saveButton.Click += SaveButton_Click;
         Controls.Add(cancelButton);
         Controls.Add(saveButton);
@@ -242,6 +259,7 @@ public class ProfileForm : Form
         _browserPathBox.Text = currentDefaultBrowserPath ?? string.Empty;
         _gitHubUsernameBox.Text = currentGitHubUsername ?? string.Empty;
         _dataFolderBox.Text = currentDataFolder ?? string.Empty;
+        _debugLoggingBox.Checked = currentDebugLoggingEnabled;
         UpdateMfaStatusLabel();
         if (_profile.HasPicture)
         {
@@ -311,6 +329,8 @@ public class ProfileForm : Form
 
         var gitHubUsername = _gitHubUsernameBox.Text.Trim();
         GitHubUsername = string.IsNullOrEmpty(gitHubUsername) ? null : gitHubUsername;
+
+        DebugLoggingEnabled = _debugLoggingBox.Checked;
 
         DialogResult = DialogResult.OK;
     }

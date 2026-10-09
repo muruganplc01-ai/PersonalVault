@@ -22,11 +22,22 @@ public static class DebugLog
     private static readonly string LogsFolder = Path.Combine(AppContext.BaseDirectory, "logs");
     private static readonly object WriteLock = new();
 
-    /// <summary>Checked fresh on every call (a plain File.Exists is cheap) so toggling debug.txt takes effect immediately without restarting the app.</summary>
+    /// <summary>
+    /// Set once at startup (and again whenever changed) from AppSettings.DebugLoggingEnabled
+    /// - see TrayApplicationContext's GetDebugLoggingEnabled/SetDebugLoggingEnabled and
+    /// Profile's "Enable diagnostic logging" checkbox. This is the normal, visible way to
+    /// turn logging on/off; the debug.txt file below still works too (dropping it next to
+    /// the .exe turns logging on immediately with no restart needed), kept as a fallback
+    /// for when the app can't be reached through its own UI.
+    /// </summary>
+    public static bool PreferenceEnabled { get; set; }
+
+    /// <summary>Checked fresh on every call (a plain File.Exists is cheap) so toggling either the preference or debug.txt takes effect immediately without restarting the app.</summary>
     public static bool IsEnabled
     {
         get
         {
+            if (PreferenceEnabled) return true;
             try { return File.Exists(TriggerFilePath); }
             catch { return false; }
         }

@@ -29,6 +29,8 @@ public class MainForm : Form
     private readonly Action _openMfaSetup;
     private readonly Func<AccountEntry, TimeSpan, Task<string>> _shareAccount;
     private readonly Action<string, string> _notify;
+    private readonly Func<bool> _getDebugLoggingEnabled;
+    private readonly Action<bool> _setDebugLoggingEnabled;
     private readonly ListView _listView;
     private readonly TextBox _searchBox;
     private readonly ComboBox _categoryFilter;
@@ -101,7 +103,9 @@ public class MainForm : Form
         Action<string> changeDataFolder,
         Action openMfaSetup,
         Func<AccountEntry, TimeSpan, Task<string>> shareAccount,
-        Action<string, string> notify)
+        Action<string, string> notify,
+        Func<bool> getDebugLoggingEnabled,
+        Action<bool> setDebugLoggingEnabled)
     {
         _vault = vault;
         _save = save;
@@ -119,6 +123,8 @@ public class MainForm : Form
         _openMfaSetup = openMfaSetup;
         _shareAccount = shareAccount;
         _notify = notify;
+        _getDebugLoggingEnabled = getDebugLoggingEnabled;
+        _setDebugLoggingEnabled = setDebugLoggingEnabled;
 
         Text = "Personal Vault";
         Width = 960;
@@ -1191,11 +1197,12 @@ public class MainForm : Form
 
     private void EditProfile()
     {
-        using var form = new ProfileForm(_vault.Profile, _getDefaultBrowserPath(), _getGitHubUsername(), _changeMasterSecret, _getDataFolder(), _changeDataFolder, _openMfaSetup, OpenCategoryDefaults, OpenCategoryFieldSets);
+        using var form = new ProfileForm(_vault.Profile, _getDefaultBrowserPath(), _getGitHubUsername(), _changeMasterSecret, _getDataFolder(), _changeDataFolder, _openMfaSetup, OpenCategoryDefaults, OpenCategoryFieldSets, _getDebugLoggingEnabled());
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             _setDefaultBrowserPath(form.SelectedBrowserPath);
             _setGitHubUsername(form.GitHubUsername);
+            _setDebugLoggingEnabled(form.DebugLoggingEnabled);
             _save();
             ApplyFilter(); // Owner column defaults may be worth re-checking after a name change, cheap to just refresh.
         }
