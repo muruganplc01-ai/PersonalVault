@@ -237,7 +237,17 @@ public class GoogleDriveSync
 
         try
         {
-            using var stream = new FileStream(localFilePath, FileMode.Open, FileAccess.Read);
+            // Read the whole file up-front into memory rather than holding a FileStream
+            // open against it for the entire (possibly several-second) network upload -
+            // a held read handle here used to collide with VaultStorage.SaveLocal's
+            // File.Replace if a save happened to land while a previous save's
+            // fire-and-forget upload was still in flight, crashing with an unhandled
+            // IOException ("being used by another process") or UnauthorizedAccessException
+            // ("Access to the path is denied") depending on the exact lock mode held.
+            // Reading the bytes and closing the file immediately removes the overlap
+            // window entirely instead of just narrowing it.
+            byte[] fileBytes = await File.ReadAllBytesAsync(localFilePath);
+            using var stream = new MemoryStream(fileBytes);
 
             if (!string.IsNullOrEmpty(existingFileId))
             {
