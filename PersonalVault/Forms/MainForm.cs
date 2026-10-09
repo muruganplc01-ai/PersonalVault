@@ -49,6 +49,8 @@ public class MainForm : Form
     // --- Overview tab ---
     private readonly ListView _balancesListView;
     private readonly Label _totalOnHandLabel;
+    private readonly Label _totalLiabilitiesLabel;
+    private readonly Label _totalAssetValueLabel;
     private readonly Label _totalDuesLabel;
     private readonly Label _netLabel;
 
@@ -371,9 +373,13 @@ public class MainForm : Form
             Padding = new Padding(8, 8, 8, 4)
         };
         _totalOnHandLabel = new Label { AutoSize = true, Font = new Font(Font, FontStyle.Bold), Padding = new Padding(0, 4, 24, 0) };
+        _totalLiabilitiesLabel = new Label { AutoSize = true, Font = new Font(Font, FontStyle.Bold), Padding = new Padding(0, 4, 24, 0), ForeColor = Color.Firebrick };
+        _totalAssetValueLabel = new Label { AutoSize = true, Font = new Font(Font, FontStyle.Bold), Padding = new Padding(0, 4, 24, 0) };
         _totalDuesLabel = new Label { AutoSize = true, Font = new Font(Font, FontStyle.Bold), Padding = new Padding(0, 4, 24, 0) };
         _netLabel = new Label { AutoSize = true, Font = new Font(Font, FontStyle.Bold), Padding = new Padding(0, 4, 0, 0) };
         overviewTopPanel.Controls.Add(_totalOnHandLabel);
+        overviewTopPanel.Controls.Add(_totalLiabilitiesLabel);
+        overviewTopPanel.Controls.Add(_totalAssetValueLabel);
         overviewTopPanel.Controls.Add(_totalDuesLabel);
         overviewTopPanel.Controls.Add(_netLabel);
 
@@ -403,6 +409,7 @@ public class MainForm : Form
         _balancesListView.Columns.Add("Name", 170);
         _balancesListView.Columns.Add("Institution", 140);
         _balancesListView.Columns.Add("Owner", 110);
+        _balancesListView.Columns.Add("Type", 80);
         _balancesListView.Columns.Add("Balance", 110);
         _balancesListView.Columns.Add("As Of", 100);
         _balancesListView.DoubleClick += (_, _) => EditFromBalancesTab();
@@ -563,7 +570,7 @@ public class MainForm : Form
     private void RefreshOverview()
     {
         var withBalance = _vault.Accounts
-            .Select(a => new { Account = a, Balance = EffectiveBalance(a), AsOf = EffectiveBalanceAsOf(a) })
+            .Select(a => new { Account = a, Balance = EffectiveBalance(a), AsOf = EffectiveBalanceAsOf(a), Type = GetCategoryBalanceType(a.Category) })
             .Where(x => x.Balance.HasValue)
             .OrderBy(x => x.Account.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -576,6 +583,7 @@ public class MainForm : Form
             item.SubItems.Add(x.Account.Name);
             item.SubItems.Add(x.Account.Institution);
             item.SubItems.Add(x.Account.Owner);
+            item.SubItems.Add(x.Type == BalanceType.Liability ? "Liability" : "Asset");
             item.SubItems.Add(x.Balance!.Value.ToString("C"));
             item.SubItems.Add(x.AsOf?.ToString("MMM d, yyyy") ?? "");
             item.Tag = x.Account;
@@ -583,14 +591,40 @@ public class MainForm : Form
         }
         _balancesListView.EndUpdate();
 
-        var totalOnHand = withBalance.Sum(x => x.Balance!.Value);
+        // A loan's remaining balance is a debt, not cash on hand - Liability-classified
+        // categories (built-in: CreditCard/Mortgage/CarLoan, or whatever Profile ->
+        // "Field Sets..." overrides to Liability) total separately and subtract from
+        // Net instead of inflating Total On Hand. Anything unclassified defaults to
+        // Asset, same as this app's behavior before this distinction existed.
+        var totalOnHand = withBalance.Where(x => x.Type != BalanceType.Liability).Sum(x => x.Balance!.Value);
+        var totalLiabilities = withBalance.Where(x => x.Type == BalanceType.Liability).Sum(x => x.Balance!.Value);
+        var totalAssetValue = _vault.Accounts.Where(a => a.AssetValue.HasValue).Sum(a => a.AssetValue!.Value);
         var totalDues = _vault.Accounts.Where(a => a.AmountDue.HasValue).Sum(a => a.AmountDue!.Value);
-        var net = totalOnHand - totalDues;
+        var net = totalOnHand + totalAssetValue - totalLiabilities - totalDues;
 
         _totalOnHandLabel.Text = $"Total On Hand: {totalOnHand:C}";
+        _totalLiabilitiesLabel.Text = $"Total Liabilities: {totalLiabilities:C}";
+        _totalLiabilitiesLabel.Visible = totalLiabilities != 0;
+        _totalAssetValueLabel.Text = $"Total Asset Value: {totalAssetValue:C}";
+        _totalAssetValueLabel.Visible = totalAssetValue != 0;
         _totalDuesLabel.Text = $"Total Dues: {totalDues:C}";
         _netLabel.Text = $"Net: {net:C}";
         _netLabel.ForeColor = net < 0 ? Color.Firebrick : Color.SeaGreen;
+    }
+
+    /// <summary>
+    /// Asset or Liability for a category's Current Balance - vault override (Profile ->
+    /// "Field Sets...") if set, else the built-in classification, else Asset (the
+    /// behavior this app always had before this distinction existed, so nothing
+    /// unclassified silently starts subtracting from net worth).
+    /// </summary>
+    private BalanceType GetCategoryBalanceType(string category)
+    {
+        var vaultMatch = _vault.CustomCategoryBalanceTypes
+            .FirstOrDefault(kv => string.Equals(kv.Key, category, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrEmpty(vaultMatch.Key)) return vaultMatch.Value;
+
+        return CategoryBalanceTypeDefaults.For(category) ?? BalanceType.Asset;
     }
 
     /// <summary>
@@ -624,7 +658,7 @@ public class MainForm : Form
         if (_balancesListView.SelectedItems.Count == 0) return;
         var account = (AccountEntry)_balancesListView.SelectedItems[0].Tag!;
 
-        using var form = new AccountEditForm(account, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields, getCustomCategoryDefault: GetCategoryDefault, saveCustomCategoryDefault: SaveCategoryDefault);
+        using var form = new AccountEditForm(account, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields, getCustomCategoryDefault: GetCategoryDefault, saveCustomCategoryDefault: SaveCategoryDefault, knownOwners: KnownOwners(), getKnownSubCategories: KnownSubCategories, categoryFieldSets: _vault.CategoryFieldSets);
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             account.ModifiedUtc = DateTime.UtcNow;
@@ -818,6 +852,27 @@ public class MainForm : Form
             .Union(_vault.CustomCategoryDefaults.Keys, StringComparer.OrdinalIgnoreCase)
             .OrderBy(c => c, StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Every distinct, non-blank Owner value already used across all accounts, for seeding Account Details' Owner dropdown - same idea as KnownCategories.</summary>
+    private IEnumerable<string> KnownOwners() =>
+        _vault.Accounts.Select(a => a.Owner)
+            .Where(o => !string.IsNullOrWhiteSpace(o))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(o => o, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Every distinct, non-blank Sub Category already used for accounts in the given
+    /// Category - deliberately scoped per-category (not vault-wide like
+    /// KnownCategories/KnownOwners) so Email's Work/Personal sub-categories don't
+    /// clutter CreditCard's suggestion list.
+    /// </summary>
+    private IEnumerable<string> KnownSubCategories(string category) =>
+        _vault.Accounts
+            .Where(a => string.Equals(a.Category, category, StringComparison.OrdinalIgnoreCase))
+            .Select(a => a.SubCategory)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(s => s, StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// Looks up a previously-defined "suggested fields" template for a custom category
     /// (see VaultData.CustomCategoryFields) - matched case-insensitively since the
@@ -881,6 +936,17 @@ public class MainForm : Form
             _save();
     }
 
+    /// <summary>Profile's "Field Sets..." button - lets you choose which fields appear in Account Details per category, and in what order.</summary>
+    private void OpenCategoryFieldSets()
+    {
+        using var form = new CategoryFieldSetsForm(_vault.CategoryFieldSets, _vault.CustomCategoryBalanceTypes, KnownCategories());
+        if (form.ShowDialog(this) == DialogResult.OK)
+        {
+            _save();
+            ApplyFilter(); // a changed field set can change what's "known" - harmless/cheap to just refresh
+        }
+    }
+
     /// <summary>Full-text-ish search across every field a person might actually remember about an account, including extra fields.</summary>
     private static bool MatchesSearch(AccountEntry a, string query)
     {
@@ -905,7 +971,7 @@ public class MainForm : Form
         if (_categoryFilter.SelectedItem is string selectedCategory && selectedCategory != AllCategoriesLabel)
             entry.Category = selectedCategory;
 
-        using var form = new AccountEditForm(entry, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields, isNewEntry: true, getCustomCategoryDefault: GetCategoryDefault, saveCustomCategoryDefault: SaveCategoryDefault);
+        using var form = new AccountEditForm(entry, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields, isNewEntry: true, getCustomCategoryDefault: GetCategoryDefault, saveCustomCategoryDefault: SaveCategoryDefault, knownOwners: KnownOwners(), getKnownSubCategories: KnownSubCategories, categoryFieldSets: _vault.CategoryFieldSets);
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             _vault.Accounts.Add(entry);
@@ -921,7 +987,7 @@ public class MainForm : Form
         var account = SelectedAccount();
         if (account == null) return;
 
-        using var form = new AccountEditForm(account, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields, getCustomCategoryDefault: GetCategoryDefault, saveCustomCategoryDefault: SaveCategoryDefault);
+        using var form = new AccountEditForm(account, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields, getCustomCategoryDefault: GetCategoryDefault, saveCustomCategoryDefault: SaveCategoryDefault, knownOwners: KnownOwners(), getKnownSubCategories: KnownSubCategories, categoryFieldSets: _vault.CategoryFieldSets);
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             account.ModifiedUtc = DateTime.UtcNow;
@@ -1112,7 +1178,7 @@ public class MainForm : Form
 
     private void EditProfile()
     {
-        using var form = new ProfileForm(_vault.Profile, _getDefaultBrowserPath(), _getGitHubUsername(), _changeMasterSecret, _getDataFolder(), _changeDataFolder, _openMfaSetup, OpenCategoryDefaults);
+        using var form = new ProfileForm(_vault.Profile, _getDefaultBrowserPath(), _getGitHubUsername(), _changeMasterSecret, _getDataFolder(), _changeDataFolder, _openMfaSetup, OpenCategoryDefaults, OpenCategoryFieldSets);
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             _setDefaultBrowserPath(form.SelectedBrowserPath);

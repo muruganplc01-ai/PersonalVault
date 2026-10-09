@@ -18,7 +18,26 @@ public class AccountEditForm : Form
     private readonly Action<string, string[]>? _saveCustomCategoryFields;
     private readonly Func<string, CategoryDefault?>? _getCustomCategoryDefault;
     private readonly Action<string, CategoryDefault>? _saveCustomCategoryDefault;
+    private readonly Func<string, IEnumerable<string>>? _getKnownSubCategories;
+    private readonly IReadOnlyDictionary<string, List<FieldDefinition>> _vaultCategoryFieldSets;
     private readonly bool _isNewEntry;
+
+    /// <summary>
+    /// Every control belonging to a given reserved field caption (see
+    /// Models/AccountEntry.cs -> CategoryFieldSetDefaults.ReservedCaptions), populated
+    /// via Track() as each row is built below - lets ApplyFieldSetVisibility toggle an
+    /// entire field (label + input, or every row in a multi-row group like "Due Date")
+    /// on or off together, driven by the active category's field set.
+    /// </summary>
+    private readonly Dictionary<string, List<Control>> _fieldControls = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Records that the given controls all belong to one reserved field caption, appending across multiple calls (e.g. the 3 rows making up "Due Date").</summary>
+    private void Track(string caption, params Control[] controls)
+    {
+        if (!_fieldControls.TryGetValue(caption, out var list))
+            _fieldControls[caption] = list = new List<Control>();
+        list.AddRange(controls);
+    }
 
     private const string CreditCardCategory = "CreditCard";
     private const string BankAccountCategory = "BankAccount";
@@ -33,7 +52,8 @@ public class AccountEditForm : Form
     private List<BankSubAccount> _workingSubAccounts = new();
     private readonly TextBox _nameBox = new() { Dock = DockStyle.Fill };
     private readonly TextBox _institutionBox = new() { Dock = DockStyle.Fill };
-    private readonly TextBox _ownerBox = new() { Dock = DockStyle.Fill };
+    private readonly ComboBox _ownerBox = new() { DropDownStyle = ComboBoxStyle.DropDown, Dock = DockStyle.Fill };
+    private readonly ComboBox _subCategoryBox = new() { DropDownStyle = ComboBoxStyle.DropDown, Dock = DockStyle.Fill };
     private readonly TextBox _userNameBox = new() { Dock = DockStyle.Fill };
     private readonly TextBox _passwordBox = new() { Dock = DockStyle.Fill, UseSystemPasswordChar = true };
     private readonly CheckBox _showPasswordBox = new() { Text = "Show", AutoSize = true, Anchor = AnchorStyles.Left };
@@ -63,6 +83,15 @@ public class AccountEditForm : Form
         Dock = DockStyle.Fill, Format = DateTimePickerFormat.Short, Enabled = false
     };
     private readonly Button _importBalanceButton = new() { Text = "Import from CSV...", AutoSize = true, Anchor = AnchorStyles.Left };
+    private readonly CheckBox _hasAssetValueBox = new() { Text = "Track asset value", AutoSize = true, Anchor = AnchorStyles.Left };
+    private readonly NumericUpDown _assetValueBox = new()
+    {
+        Dock = DockStyle.Fill, DecimalPlaces = 2, Minimum = 0, Maximum = 100_000_000, ThousandsSeparator = true, Enabled = false
+    };
+    private readonly DateTimePicker _assetValueAsOfBox = new()
+    {
+        Dock = DockStyle.Fill, Format = DateTimePickerFormat.Short, Enabled = false
+    };
     // AcceptsReturn = true is required here - without it, a multiline TextBox still
     // sends the Enter key up to the form's AcceptButton (Save) instead of inserting a
     // newline, so pressing Enter while typing Notes/Extra info would save-and-close
@@ -71,6 +100,13 @@ public class AccountEditForm : Form
     private readonly TextBox _extraFieldsBox = new() { Dock = DockStyle.Fill, Multiline = true, Height = 70, ScrollBars = ScrollBars.Vertical, AcceptsReturn = true };
     private readonly Button _expandNotesButton = new() { Text = "⤢", AutoSize = true, Margin = new Padding(4, 0, 0, 0) };
     private readonly Button _expandExtraFieldsButton = new() { Text = "⤢", AutoSize = true, Margin = new Padding(4, 0, 0, 0) };
+
+    // --- Custom (non-reserved-caption) fields from the active category's field set -
+    // rebuilt every category change by RebuildCustomFieldsPanel. Stored in
+    // AccountEntry.ExtraFields keyed by caption, same as the reserved "Extra Info"
+    // memo box - see SaveButton_Click for how the two are kept from clobbering each other.
+    private readonly FlowLayoutPanel _customFieldsPanel = new() { Dock = DockStyle.Top, FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false };
+    private readonly Dictionary<string, Control> _customFieldControls = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// knownCategories is every category currently in use across the vault (plus the
@@ -88,7 +124,10 @@ public class AccountEditForm : Form
         Action<string, string[]>? saveCustomCategoryFields = null,
         bool isNewEntry = false,
         Func<string, CategoryDefault?>? getCustomCategoryDefault = null,
-        Action<string, CategoryDefault>? saveCustomCategoryDefault = null)
+        Action<string, CategoryDefault>? saveCustomCategoryDefault = null,
+        IEnumerable<string>? knownOwners = null,
+        Func<string, IEnumerable<string>>? getKnownSubCategories = null,
+        IReadOnlyDictionary<string, List<FieldDefinition>>? categoryFieldSets = null)
     {
         _entry = entry;
         _defaultOwnerName = defaultOwnerName;
@@ -98,6 +137,10 @@ public class AccountEditForm : Form
         _isNewEntry = isNewEntry;
         _getCustomCategoryDefault = getCustomCategoryDefault;
         _saveCustomCategoryDefault = saveCustomCategoryDefault;
+        _getKnownSubCategories = getKnownSubCategories;
+        _vaultCategoryFieldSets = categoryFieldSets ?? new Dictionary<string, List<FieldDefinition>>();
+
+        _ownerBox.Items.AddRange((knownOwners ?? Enumerable.Empty<string>()).Cast<object>().ToArray());
 
         Text = "Account Details";
         Width = 540;
@@ -139,11 +182,12 @@ public class AccountEditForm : Form
         categoryPanel.Controls.Add(_addCategoryButton, 2, 0);
 
         int row = 0;
-        AddRow(layout, ref row, "Category:", categoryPanel);
-        AddRow(layout, ref row, "Name:", _nameBox);
-        AddRow(layout, ref row, "Institution:", _institutionBox);
-        AddRow(layout, ref row, "Owner:", _ownerBox);
-        AddRow(layout, ref row, "Username:", _userNameBox);
+        AddRow(layout, ref row, "Category:", categoryPanel); // Category itself is never hidden - it's the selector driving everything else.
+        Track("Name", AddRow(layout, ref row, "Name:", _nameBox), _nameBox);
+        Track("Institution", AddRow(layout, ref row, "Institution:", _institutionBox), _institutionBox);
+        Track("Owner", AddRow(layout, ref row, "Owner:", _ownerBox), _ownerBox);
+        Track("Sub Category", AddRow(layout, ref row, "Sub Category:", _subCategoryBox), _subCategoryBox);
+        Track("Username", AddRow(layout, ref row, "Username:", _userNameBox), _userNameBox);
 
         var passwordPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, AutoSize = true };
         passwordPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -152,42 +196,52 @@ public class AccountEditForm : Form
         passwordPanel.Controls.Add(_passwordBox, 0, 0);
         passwordPanel.Controls.Add(_showPasswordBox, 1, 0);
         passwordPanel.Controls.Add(_generateButton, 2, 0);
-        AddRow(layout, ref row, "Password:", passwordPanel);
+        Track("Password", AddRow(layout, ref row, "Password:", passwordPanel), passwordPanel);
 
+        // Account # deliberately isn't part of the per-category field set - CreditCard's
+        // Card Details popup writes the card number directly into this same textbox
+        // regardless of category, so it always stays visible and always saves.
         AddRow(layout, ref row, "Account #:", _accountNumberBox);
 
-        // Only shown for the CreditCard category - see UpdateCardDetailsVisibility.
+        // Only shown for the CreditCard category - see UpdateCardDetailsVisibility (and, as of
+        // the per-category field set feature, ApplyFieldSetVisibility - the two work together:
+        // a category must both be CreditCard AND have "Card Details" in its field set).
         layout.RowCount = row + 1;
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.Controls.Add(_cardDetailsLabel, 0, row);
         layout.Controls.Add(_cardDetailsButton, 1, row);
         row++;
+        Track("Card Details", _cardDetailsLabel, _cardDetailsButton);
 
-        // Only shown for the BankAccount category - see UpdateBankAccountsVisibility.
+        // Only shown for the BankAccount category - see UpdateBankAccountsVisibility (same
+        // both-must-agree relationship with ApplyFieldSetVisibility as Card Details above).
         layout.RowCount = row + 1;
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.Controls.Add(_bankAccountsLabel, 0, row);
         layout.Controls.Add(_bankAccountsButton, 1, row);
         row++;
+        Track("Bank Accounts", _bankAccountsLabel, _bankAccountsButton);
 
         var websitePanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoSize = true };
         websitePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         websitePanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         websitePanel.Controls.Add(_websiteBox, 0, 0);
         websitePanel.Controls.Add(_openWebsiteButton, 1, 0);
-        AddRow(layout, ref row, "Website:", websitePanel);
+        Track("Website", AddRow(layout, ref row, "Website:", websitePanel), websitePanel);
 
-        AddRow(layout, ref row, "Phone:", _phoneBox);
+        Track("Phone", AddRow(layout, ref row, "Phone:", _phoneBox), _phoneBox);
 
         var duePanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoSize = true };
         duePanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         duePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         duePanel.Controls.Add(_hasDueDateBox, 0, 0);
         duePanel.Controls.Add(_dueDatePicker, 1, 0);
-        AddRow(layout, ref row, "Due date:", duePanel);
-
-        AddRow(layout, ref row, "Repeats:", _recurrenceBox);
-        AddRow(layout, ref row, "", _autoPaymentBox);
+        // "Due Date" as a reserved caption covers this whole group - the due date picker,
+        // Repeats, and Autopay all show/hide together, since Repeats/Autopay are meaningless
+        // without a due date to repeat.
+        Track("Due Date", AddRow(layout, ref row, "Due date:", duePanel), duePanel);
+        Track("Due Date", AddRow(layout, ref row, "Repeats:", _recurrenceBox), _recurrenceBox);
+        Track("Due Date", AddRow(layout, ref row, "", _autoPaymentBox), _autoPaymentBox);
 
         // Amount due: a fixed balance owed (tuition/college fees, a remaining loan
         // payoff, etc.) - distinct from the recurring Due date/Repeats above, which are
@@ -197,7 +251,7 @@ public class AccountEditForm : Form
         amountDuePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         amountDuePanel.Controls.Add(_hasAmountDueBox, 0, 0);
         amountDuePanel.Controls.Add(_amountDueBox, 1, 0);
-        AddRow(layout, ref row, "Amount due:", amountDuePanel);
+        Track("Amount Due", AddRow(layout, ref row, "Amount due:", amountDuePanel), amountDuePanel);
 
         // Current balance: a point-in-time snapshot (bank or investment account, etc.)
         // used by the Overview tab's "Total On Hand" figure - works for any category,
@@ -209,22 +263,35 @@ public class AccountEditForm : Form
         balancePanel.Controls.Add(_hasBalanceBox, 0, 0);
         balancePanel.Controls.Add(_balanceBox, 1, 0);
         balancePanel.Controls.Add(_balanceAsOfBox, 2, 0);
-        AddRow(layout, ref row, "Current balance:", balancePanel);
-        AddRow(layout, ref row, "", _importBalanceButton);
+        Track("Current Balance", AddRow(layout, ref row, "Current balance:", balancePanel), balancePanel);
+        Track("Current Balance", AddRow(layout, ref row, "", _importBalanceButton), _importBalanceButton);
+
+        // Asset value: what the underlying thing is worth (e.g. a home or car) -
+        // distinct from Current Balance above, which for Mortgage/CarLoan is what you
+        // still OWE. Totalled separately in the Overview tab, never summed together
+        // with Current Balance - see MainForm.RefreshOverview.
+        var assetValuePanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, AutoSize = true };
+        assetValuePanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        assetValuePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
+        assetValuePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
+        assetValuePanel.Controls.Add(_hasAssetValueBox, 0, 0);
+        assetValuePanel.Controls.Add(_assetValueBox, 1, 0);
+        assetValuePanel.Controls.Add(_assetValueAsOfBox, 2, 0);
+        Track("Asset Value", AddRow(layout, ref row, "Asset value:", assetValuePanel), assetValuePanel);
 
         var notesPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoSize = true };
         notesPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         notesPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         notesPanel.Controls.Add(_notesBox, 0, 0);
         notesPanel.Controls.Add(_expandNotesButton, 1, 0);
-        AddRow(layout, ref row, "Notes:", notesPanel);
+        Track("Notes", AddRow(layout, ref row, "Notes:", notesPanel), notesPanel);
 
         var extraFieldsPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoSize = true };
         extraFieldsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         extraFieldsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         extraFieldsPanel.Controls.Add(_extraFieldsBox, 0, 0);
         extraFieldsPanel.Controls.Add(_expandExtraFieldsButton, 1, 0);
-        AddRow(layout, ref row, "Extra info:\n(key=value,\none per line)", extraFieldsPanel);
+        Track("Extra Info", AddRow(layout, ref row, "Extra info:\n(key=value,\none per line)", extraFieldsPanel), extraFieldsPanel);
 
         var buttonPanel = new FlowLayoutPanel
         {
@@ -250,6 +317,8 @@ public class AccountEditForm : Form
         {
             UpdateCardDetailsVisibility();
             UpdateBankAccountsVisibility();
+            RefreshSubCategoryItems();
+            ApplyFieldSetVisibility();
             if (_isNewEntry) ApplyCategoryDefaults();
         };
         _openWebsiteButton.Click += (_, _) => OpenWebsite();
@@ -270,9 +339,17 @@ public class AccountEditForm : Form
             _balanceAsOfBox.Enabled = _hasBalanceBox.Checked;
         };
         _importBalanceButton.Click += (_, _) => ImportBalanceFromCsv();
+        _hasAssetValueBox.CheckedChanged += (_, _) =>
+        {
+            _assetValueBox.Enabled = _hasAssetValueBox.Checked;
+            _assetValueAsOfBox.Enabled = _hasAssetValueBox.Checked;
+        };
+
+        _customFieldsPanel.Padding = new Padding(12, 0, 12, 0);
 
         var scrollPanel = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
         scrollPanel.Controls.Add(layout);
+        scrollPanel.Controls.Add(_customFieldsPanel);
 
         Controls.Add(scrollPanel);
         Controls.Add(buttonPanel);
@@ -315,6 +392,124 @@ public class AccountEditForm : Form
         if (defaults.Value.Institution != null)
             _institutionBox.Text = defaults.Value.Institution;
     }
+
+    /// <summary>
+    /// Repopulates Sub Category's suggestions for whichever category is currently
+    /// selected - scoped per-category (via _getKnownSubCategories) so e.g. Email's
+    /// Work/Personal values don't show up as suggestions under CreditCard. Preserves
+    /// whatever's already typed, since this runs on every category change including
+    /// ones that don't actually change Sub Category's own value.
+    /// </summary>
+    private void RefreshSubCategoryItems()
+    {
+        var categoryText = _categoryBox.SelectedItem as string;
+        var currentText = _subCategoryBox.Text;
+
+        _subCategoryBox.Items.Clear();
+        if (categoryText != null && _getKnownSubCategories != null)
+            _subCategoryBox.Items.AddRange(_getKnownSubCategories(categoryText).Cast<object>().ToArray());
+
+        _subCategoryBox.Text = currentText;
+    }
+
+    /// <summary>
+    /// Shows/hides every reserved field (see Track() calls in the constructor and
+    /// Models/AccountEntry.cs -> CategoryFieldSetDefaults) based on the active
+    /// category's field set - vault-level override if configured (Profile -> "Field
+    /// Sets..."), else the built-in starting point, else [Defaults]. Card Details/Bank
+    /// Accounts still separately depend on the category literally being
+    /// CreditCard/BankAccount (UpdateCardDetailsVisibility/UpdateBankAccountsVisibility) -
+    /// both conditions must agree for those two to show.
+    /// </summary>
+    private void ApplyFieldSetVisibility()
+    {
+        var categoryText = _categoryBox.SelectedItem as string;
+        var fieldSet = CategoryFieldSetDefaults.Resolve(categoryText, _vaultCategoryFieldSets);
+        var captionsToShow = fieldSet.Select(f => f.Caption).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (caption, controls) in _fieldControls)
+        {
+            bool show = captionsToShow.Contains(caption);
+            foreach (var control in controls)
+                control.Visible = show;
+        }
+
+        RebuildCustomFieldsPanel(fieldSet);
+    }
+
+    /// <summary>
+    /// Rebuilds the dynamic panel of custom (non-reserved-caption) fields for the
+    /// active category - a genuinely new field typed into Profile -> "Field Sets..."
+    /// that isn't one of the built-in ones. Rendered per its DataType (String/DropDown/
+    /// Memo) and read from/written to AccountEntry.ExtraFields keyed by caption - see
+    /// SaveButton_Click for how this and the reserved "Extra Info" memo box avoid
+    /// clobbering each other. Rebuilding on every category change means an unsaved edit
+    /// to a custom field is lost if you switch categories away and back before clicking
+    /// Save - a known, minor limitation (reserved fields don't have this problem, since
+    /// their controls stay alive and are just hidden/shown rather than torn down).
+    /// </summary>
+    private void RebuildCustomFieldsPanel(List<FieldDefinition> fieldSet)
+    {
+        _customFieldsPanel.Controls.Clear();
+        _customFieldControls.Clear();
+
+        var customFields = fieldSet.Where(f => !CategoryFieldSetDefaults.ReservedCaptions.Contains(f.Caption, StringComparer.OrdinalIgnoreCase));
+
+        foreach (var field in customFields)
+        {
+            _entry.ExtraFields.TryGetValue(field.Caption, out var existingValue);
+
+            Control valueControl;
+            Control inputControl;
+
+            if (field.DataType == FieldDataType.Memo)
+            {
+                var memoBox = new TextBox { Multiline = true, Height = 55, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill, AcceptsReturn = true, Text = existingValue ?? "" };
+                var expandBtn = new Button { Text = "⤢", AutoSize = true, Margin = new Padding(4, 0, 0, 0) };
+                expandBtn.Click += (_, _) => OpenExpandedEditor(memoBox, field.Caption);
+                var memoPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoSize = true };
+                memoPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                memoPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+                memoPanel.Controls.Add(memoBox, 0, 0);
+                memoPanel.Controls.Add(expandBtn, 1, 0);
+                valueControl = memoPanel;
+                inputControl = memoBox;
+            }
+            else if (field.DataType == FieldDataType.DropDown)
+            {
+                // No cross-entry suggestion list for a custom dropdown (would need yet
+                // another vault-wide lookup delegate) - still fully usable as free text.
+                var combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDown, Dock = DockStyle.Fill, Text = existingValue ?? "" };
+                valueControl = combo;
+                inputControl = combo;
+            }
+            else
+            {
+                var textBox = new TextBox { Dock = DockStyle.Fill, MaxLength = Math.Max(1, field.Size), Text = existingValue ?? "" };
+                valueControl = textBox;
+                inputControl = textBox;
+            }
+
+            var rowPanel = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 2, AutoSize = true };
+            rowPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
+            rowPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            rowPanel.Controls.Add(new Label { Text = field.Caption + ":", AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 6, 6, 0) }, 0, 0);
+            rowPanel.Controls.Add(valueControl, 1, 0);
+            _customFieldsPanel.Controls.Add(rowPanel);
+
+            _customFieldControls[field.Caption] = inputControl;
+        }
+    }
+
+    /// <summary>
+    /// Whether a reserved field is currently part of the active category's field set -
+    /// SaveButton_Click uses this so a field hidden by the category's configuration
+    /// never has its underlying AccountEntry value overwritten (and definitely never
+    /// cleared) just because Save was clicked. This is what makes hiding a field purely
+    /// cosmetic rather than destructive.
+    /// </summary>
+    private bool IsFieldVisible(string caption) =>
+        _fieldControls.TryGetValue(caption, out var controls) && controls.Count > 0 && controls[0].Visible;
 
     /// <summary>
     /// Pops a single multiline field (Notes or Extra info) out into a bigger, resizable
@@ -365,15 +560,15 @@ public class AccountEditForm : Form
             sourceBox.Text = textBox.Text;
     }
 
-    private static void AddRow(TableLayoutPanel layout, ref int row, string label, Control control)
+    private static Label AddRow(TableLayoutPanel layout, ref int row, string label, Control control)
     {
         layout.RowCount = row + 1;
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.Controls.Add(
-            new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 6, 6, 0) },
-            0, row);
+        var labelControl = new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 6, 6, 0) };
+        layout.Controls.Add(labelControl, 0, row);
         layout.Controls.Add(control, 1, row);
         row++;
+        return labelControl;
     }
 
     private void LoadFromEntry()
@@ -390,11 +585,14 @@ public class AccountEditForm : Form
             ?? _categoryBox.Items[0];
         UpdateCardDetailsVisibility();
         UpdateBankAccountsVisibility();
+        RefreshSubCategoryItems();
+        ApplyFieldSetVisibility();
         _workingSubAccounts = _entry.SubAccounts.Select(CloneSubAccount).ToList();
 
         _nameBox.Text = _entry.Name;
         _institutionBox.Text = _entry.Institution;
         _ownerBox.Text = string.IsNullOrWhiteSpace(_entry.Owner) ? _defaultOwnerName : _entry.Owner;
+        _subCategoryBox.Text = _entry.SubCategory;
         _userNameBox.Text = _entry.UserName;
         _passwordBox.Text = _entry.Password;
         _accountNumberBox.Text = _entry.AccountNumber;
@@ -403,7 +601,12 @@ public class AccountEditForm : Form
         _recurrenceBox.SelectedItem = _entry.Recurrence.ToString();
         _autoPaymentBox.Checked = _entry.IsAutomaticPayment;
         _notesBox.Text = _entry.Notes;
-        _extraFieldsBox.Text = string.Join(Environment.NewLine, _entry.ExtraFields.Select(kv => $"{kv.Key}={kv.Value}"));
+        // Excludes anything rendered as its own dedicated custom field (see
+        // RebuildCustomFieldsPanel, already run via ApplyFieldSetVisibility above) -
+        // those are edited through their own control, not duplicated here too.
+        _extraFieldsBox.Text = string.Join(Environment.NewLine, _entry.ExtraFields
+            .Where(kv => !_customFieldControls.ContainsKey(kv.Key))
+            .Select(kv => $"{kv.Key}={kv.Value}"));
 
         if (_entry.DueDate.HasValue)
         {
@@ -443,6 +646,21 @@ public class AccountEditForm : Form
             _balanceBox.Enabled = false;
             _balanceAsOfBox.Enabled = false;
         }
+
+        if (_entry.AssetValue.HasValue)
+        {
+            _hasAssetValueBox.Checked = true;
+            _assetValueBox.Enabled = true;
+            _assetValueBox.Value = ClampToRange(_assetValueBox, _entry.AssetValue.Value);
+            _assetValueAsOfBox.Enabled = true;
+            _assetValueAsOfBox.Value = _entry.AssetValueAsOf ?? DateTime.Now;
+        }
+        else
+        {
+            _hasAssetValueBox.Checked = false;
+            _assetValueBox.Enabled = false;
+            _assetValueAsOfBox.Enabled = false;
+        }
     }
 
     private static decimal ClampToRange(NumericUpDown box, decimal value) =>
@@ -462,31 +680,83 @@ public class AccountEditForm : Form
 
         var previousDueDate = _entry.DueDate;
 
+        // Account # is always saved regardless of field-set visibility - see its Track()
+        // call site for why. Category itself is never hidden either.
         _entry.Category = categoryText;
-        _entry.Name = _nameBox.Text.Trim();
-        _entry.Institution = _institutionBox.Text.Trim();
-        _entry.Owner = _ownerBox.Text.Trim();
-        _entry.UserName = _userNameBox.Text.Trim();
-        _entry.Password = _passwordBox.Text;
         _entry.AccountNumber = _accountNumberBox.Text.Trim();
-        _entry.Website = _websiteBox.Text.Trim();
-        _entry.PhoneNumber = _phoneBox.Text.Trim();
-        _entry.Recurrence = Enum.Parse<RecurrenceType>(recurrenceText);
-        _entry.IsAutomaticPayment = _autoPaymentBox.Checked;
-        _entry.Notes = _notesBox.Text;
-        _entry.DueDate = _hasDueDateBox.Checked ? _dueDatePicker.Value.Date : null;
-        _entry.AmountDue = _hasAmountDueBox.Checked ? _amountDueBox.Value : null;
-        _entry.CurrentBalance = _hasBalanceBox.Checked ? _balanceBox.Value : null;
-        _entry.CurrentBalanceAsOf = _hasBalanceBox.Checked ? _balanceAsOfBox.Value.Date : null;
 
-        // If the due date actually changed, start the reminder cycle over for it.
-        if (_entry.DueDate != previousDueDate)
-            _entry.LastNotifiedOn = null;
+        // Every other reserved field only gets written back if it's actually part of
+        // the active category's field set - a field hidden by configuration keeps
+        // whatever value it already had on the entry, untouched. This is the safety
+        // rule that makes hiding a field purely cosmetic, never destructive.
+        if (IsFieldVisible("Name")) _entry.Name = _nameBox.Text.Trim();
+        if (IsFieldVisible("Institution")) _entry.Institution = _institutionBox.Text.Trim();
+        if (IsFieldVisible("Owner")) _entry.Owner = _ownerBox.Text.Trim();
+        if (IsFieldVisible("Sub Category")) _entry.SubCategory = _subCategoryBox.Text.Trim();
+        if (IsFieldVisible("Username")) _entry.UserName = _userNameBox.Text.Trim();
+        if (IsFieldVisible("Password")) _entry.Password = _passwordBox.Text;
+        if (IsFieldVisible("Website")) _entry.Website = _websiteBox.Text.Trim();
+        if (IsFieldVisible("Phone")) _entry.PhoneNumber = _phoneBox.Text.Trim();
+        if (IsFieldVisible("Notes")) _entry.Notes = _notesBox.Text;
 
-        _entry.ExtraFields = _extraFieldsBox.Lines
-            .Select(line => line.Split('=', 2))
-            .Where(parts => parts.Length == 2 && !string.IsNullOrWhiteSpace(parts[0]))
-            .ToDictionary(parts => parts[0].Trim(), parts => parts[1].Trim());
+        if (IsFieldVisible("Extra Info"))
+        {
+            var fromMemo = _extraFieldsBox.Lines
+                .Select(line => line.Split('=', 2))
+                .Where(parts => parts.Length == 2 && !string.IsNullOrWhiteSpace(parts[0]))
+                // Custom fields are edited through their own dedicated control, not
+                // this memo box - a line here that happens to match one is ignored
+                // rather than fought over between the two.
+                .Where(parts => !_customFieldControls.ContainsKey(parts[0].Trim()))
+                .ToDictionary(parts => parts[0].Trim(), parts => parts[1].Trim(), StringComparer.OrdinalIgnoreCase);
+
+            // Preserve existing custom-field entries this replace doesn't know about -
+            // otherwise wholesale-replacing ExtraFields here would wipe them out before
+            // the custom-fields loop below gets a chance to write them back.
+            foreach (var kv in _entry.ExtraFields)
+                if (_customFieldControls.ContainsKey(kv.Key) && !fromMemo.ContainsKey(kv.Key))
+                    fromMemo[kv.Key] = kv.Value;
+
+            _entry.ExtraFields = fromMemo;
+        }
+
+        // Custom (non-reserved-caption) fields from the active category's field set -
+        // always saved regardless of Extra Info's own visibility, and always after the
+        // block above so they're never clobbered by its wholesale dictionary replace.
+        foreach (var (caption, control) in _customFieldControls)
+        {
+            var value = control.Text.Trim();
+            if (string.IsNullOrEmpty(value))
+                _entry.ExtraFields.Remove(caption);
+            else
+                _entry.ExtraFields[caption] = value;
+        }
+
+        if (IsFieldVisible("Due Date"))
+        {
+            _entry.Recurrence = Enum.Parse<RecurrenceType>(recurrenceText);
+            _entry.IsAutomaticPayment = _autoPaymentBox.Checked;
+            _entry.DueDate = _hasDueDateBox.Checked ? _dueDatePicker.Value.Date : null;
+
+            // If the due date actually changed, start the reminder cycle over for it.
+            if (_entry.DueDate != previousDueDate)
+                _entry.LastNotifiedOn = null;
+        }
+
+        if (IsFieldVisible("Amount Due"))
+            _entry.AmountDue = _hasAmountDueBox.Checked ? _amountDueBox.Value : null;
+
+        if (IsFieldVisible("Current Balance"))
+        {
+            _entry.CurrentBalance = _hasBalanceBox.Checked ? _balanceBox.Value : null;
+            _entry.CurrentBalanceAsOf = _hasBalanceBox.Checked ? _balanceAsOfBox.Value.Date : null;
+        }
+
+        if (IsFieldVisible("Asset Value"))
+        {
+            _entry.AssetValue = _hasAssetValueBox.Checked ? _assetValueBox.Value : null;
+            _entry.AssetValueAsOf = _hasAssetValueBox.Checked ? _assetValueAsOfBox.Value.Date : null;
+        }
 
         _entry.SubAccounts = _workingSubAccounts;
 

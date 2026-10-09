@@ -112,6 +112,170 @@ public class CategoryDefault
 }
 
 /// <summary>
+/// The three kinds of control a custom (non-reserved) field can render as in Account
+/// Details - see FieldDefinition/CategoryFieldSetDefaults below. Reserved/built-in captions
+/// (Name, Password, Due Date, etc.) ignore this entirely, since they already have
+/// their own specially-behaved controls.
+/// </summary>
+public enum FieldDataType { String, DropDown, Memo }
+
+/// <summary>
+/// One field's definition within a category's field set - a caption, how it should be
+/// rendered if it's a custom field, and a size hint. See CategoryFieldSetDefaults' doc comment
+/// for the full picture of how these drive Account Details.
+/// </summary>
+public class FieldDefinition
+{
+    public string Caption { get; set; } = "";
+    public FieldDataType DataType { get; set; } = FieldDataType.String;
+    public int Size { get; set; } = 150;
+}
+
+/// <summary>
+/// Defines, per category, which fields appear on Account Details and in what order -
+/// configured by hand in Profile -> "Field Sets..." (Forms/CategoryFieldSetsForm.cs)
+/// and stored in VaultData.CategoryFieldSets, or falling back to the built-in starting
+/// points here when a category has no explicit vault-level entry.
+///
+/// A caption matching one of ReservedCaptions (case-insensitive) maps to an existing,
+/// specially-behaved control already in AccountEditForm (password mask+generate,
+/// website open button, the Due Date/Repeats/Autopay group, etc.) - the field set only
+/// controls whether that control is shown and where, never how it renders. Any other
+/// caption is a genuinely custom field, rendered per its DataType (String/DropDown/
+/// Memo) and stored in AccountEntry.ExtraFields keyed by that caption - reusing
+/// storage that already round-trips through save/load/Drive sync/CSV, so adding a
+/// custom field is zero schema risk.
+///
+/// Hiding a reserved field from a category's set never clears its value - Account
+/// Details' Save only ever writes back from a control that's actually visible, so an
+/// older entry's data for a since-hidden field just sits there untouched, ready to
+/// reappear if the field set changes back.
+/// </summary>
+public static class CategoryFieldSetDefaults
+{
+    /// <summary>
+    /// Captions that map to an existing control/group in AccountEditForm rather than
+    /// being rendered generically. Order here is also the order they'd appear in if
+    /// everything were enabled - BuiltInDefaults below reorders/omits per category.
+    /// "Account #" is deliberately not included here - CreditCard's Card Details popup
+    /// writes the card number directly into that textbox regardless of category, so it
+    /// always stays visible in AccountEditForm and always saves.
+    /// </summary>
+    public static readonly string[] ReservedCaptions =
+    {
+        "Name", "Institution", "Owner", "Sub Category", "Username", "Password",
+        "Website", "Phone", "Due Date", "Amount Due", "Current Balance", "Asset Value",
+        "Bank Accounts", "Card Details", "Notes", "Extra Info"
+    };
+
+    public const string DefaultsKey = "[Defaults]";
+
+    private static List<FieldDefinition> Fields(params string[] captions) =>
+        captions.Select(c => new FieldDefinition { Caption = c }).ToList();
+
+    /// <summary>
+    /// Built-in starting points, fully editable afterward from Profile -> "Field
+    /// Sets...". [Defaults] applies to any category with no explicit entry here or in
+    /// VaultData.CategoryFieldSets - including brand-new/custom categories like "Work"
+    /// or "Azure", which is exactly why Due Date/Amount Due/Current Balance are left
+    /// out of it: those don't make sense for a credential-only entry.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, List<FieldDefinition>> BuiltInDefaults =
+        new Dictionary<string, List<FieldDefinition>>(StringComparer.OrdinalIgnoreCase)
+        {
+            [DefaultsKey] = Fields("Name", "Institution", "Owner", "Sub Category",
+                "Username", "Password", "Website", "Phone", "Notes", "Extra Info"),
+
+            ["BankAccount"] = Fields("Name", "Institution", "Owner", "Sub Category",
+                "Username", "Password", "Website", "Phone", "Bank Accounts", "Notes", "Extra Info"),
+
+            ["CreditCard"] = Fields("Name", "Institution", "Owner", "Sub Category",
+                "Username", "Password", "Website", "Phone", "Card Details",
+                "Due Date", "Amount Due", "Current Balance", "Notes", "Extra Info"),
+
+            ["Mortgage"] = Fields("Name", "Institution", "Owner", "Sub Category",
+                "Username", "Password", "Website", "Phone",
+                "Due Date", "Amount Due", "Current Balance", "Asset Value", "Notes", "Extra Info"),
+
+            ["CarLoan"] = Fields("Name", "Institution", "Owner", "Sub Category",
+                "Username", "Password", "Website", "Phone",
+                "Due Date", "Amount Due", "Current Balance", "Asset Value", "Notes", "Extra Info"),
+
+            ["ApartmentRental"] = Fields("Name", "Institution", "Owner", "Sub Category",
+                "Username", "Password", "Website", "Phone", "Due Date", "Amount Due", "Notes", "Extra Info"),
+
+            ["Utility"] = Fields("Name", "Institution", "Owner", "Sub Category",
+                "Username", "Password", "Website", "Phone", "Due Date", "Amount Due", "Notes", "Extra Info"),
+
+            ["Membership"] = Fields("Name", "Institution", "Owner", "Sub Category",
+                "Username", "Password", "Website", "Phone", "Due Date", "Amount Due", "Notes", "Extra Info"),
+
+            ["Insurance"] = Fields("Name", "Institution", "Owner", "Sub Category",
+                "Username", "Password", "Website", "Phone", "Due Date", "Amount Due", "Notes", "Extra Info"),
+
+            ["HomeTax"] = Fields("Name", "Institution", "Owner", "Sub Category",
+                "Website", "Phone", "Due Date", "Amount Due", "Notes", "Extra Info"),
+
+            ["Investment"] = Fields("Name", "Institution", "Owner", "Sub Category",
+                "Username", "Password", "Website", "Phone", "Current Balance", "Notes", "Extra Info"),
+        };
+
+    /// <summary>Vault-level override if present, else the built-in for this exact category, else [Defaults].</summary>
+    public static List<FieldDefinition> Resolve(string? category, IReadOnlyDictionary<string, List<FieldDefinition>> vaultOverrides)
+    {
+        if (!string.IsNullOrWhiteSpace(category))
+        {
+            var vaultMatch = vaultOverrides.FirstOrDefault(kv => string.Equals(kv.Key, category, StringComparison.OrdinalIgnoreCase));
+            if (vaultMatch.Value != null) return vaultMatch.Value;
+
+            var builtInMatch = BuiltInDefaults.FirstOrDefault(kv => string.Equals(kv.Key, category, StringComparison.OrdinalIgnoreCase));
+            if (builtInMatch.Value != null) return builtInMatch.Value;
+        }
+
+        var vaultDefaults = vaultOverrides.FirstOrDefault(kv => string.Equals(kv.Key, DefaultsKey, StringComparison.OrdinalIgnoreCase));
+        return vaultDefaults.Value ?? BuiltInDefaults[DefaultsKey];
+    }
+}
+
+/// <summary>
+/// Whether a category's Current Balance represents money you have (Asset - a bank or
+/// investment balance) or money you owe (Liability - a loan's remaining payoff). The
+/// Overview tab needs this distinction to avoid exactly the bug that prompted adding
+/// it: a car loan's remaining balance was being added to "Total On Hand" as if it were
+/// cash, inflating net worth instead of reducing it. See CategoryBalanceTypeDefaults
+/// for the built-in classification and MainForm.RefreshOverview for how it's used.
+/// </summary>
+public enum BalanceType { Asset, Liability }
+
+/// <summary>
+/// Built-in Asset/Liability classification per category - configurable per-vault from
+/// Profile -> "Field Sets..." (stored in VaultData.CustomCategoryBalanceTypes, which
+/// takes priority over this when set). A category with no entry either place (and
+/// most don't - Utility/Membership/Insurance/HomeTax/ApartmentRental/Other/any custom
+/// category don't carry a Current Balance concept at all in their field sets) is
+/// treated as Asset by MainForm.GetCategoryBalanceType's fallback - deliberately the
+/// same behavior this app always had before this classification existed, so nothing
+/// silently starts subtracting from net worth without an explicit Liability setting.
+/// </summary>
+public static class CategoryBalanceTypeDefaults
+{
+    public static readonly IReadOnlyDictionary<string, BalanceType> Defaults =
+        new Dictionary<string, BalanceType>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["BankAccount"] = BalanceType.Asset,
+            ["Investment"] = BalanceType.Asset,
+            ["CreditCard"] = BalanceType.Liability,
+            ["Mortgage"] = BalanceType.Liability,
+            ["CarLoan"] = BalanceType.Liability,
+        };
+
+    public static BalanceType? For(string? category) =>
+        !string.IsNullOrWhiteSpace(category) && Defaults.TryGetValue(category, out var type)
+            ? type
+            : null;
+}
+
+/// <summary>
 /// One sub-account under a BankAccount-category AccountEntry - e.g. "Checking",
 /// "Savings", "Money Market" all under the same "Chase Bank" entry. Edited via Account
 /// Details' "Bank Accounts..." button (see Forms/BankAccountsForm.cs,
@@ -152,6 +316,15 @@ public class AccountEntry
     /// Defaults to "Other" so nothing is ever blank.
     /// </summary>
     public string Category { get; set; } = AccountCategories.Default;
+
+    /// <summary>
+    /// Free text, optional - e.g. "Work"/"Personal" under an Email category. Not a
+    /// fixed enum, same reasoning as Category; suggestions in Account Details are
+    /// scoped to other entries sharing the same Category, so one category's
+    /// sub-categories don't clutter another's list. Shown/hidden per category via
+    /// CategoryFieldSetDefaults like any other reserved field.
+    /// </summary>
+    public string SubCategory { get; set; } = string.Empty;
 
     /// <summary>Friendly label, e.g. "Chase Checking" or "Toyota Car Loan".</summary>
     public string Name { get; set; } = string.Empty;
@@ -203,6 +376,18 @@ public class AccountEntry
 
     /// <summary>The date CurrentBalance was accurate as of. Only meaningful when CurrentBalance is set.</summary>
     public DateTime? CurrentBalanceAsOf { get; set; }
+
+    /// <summary>
+    /// What the underlying thing is worth - distinct from CurrentBalance, which for a
+    /// Mortgage/CarLoan-type entry is what you still OWE (a liability), not what the
+    /// home/car is worth (an asset). Only meaningful for categories where that
+    /// distinction applies; null means "not tracked." Totalled separately from Total On
+    /// Hand in the Overview tab - see MainForm.RefreshOverview.
+    /// </summary>
+    public decimal? AssetValue { get; set; }
+
+    /// <summary>The date AssetValue was accurate as of. Only meaningful when AssetValue is set.</summary>
+    public DateTime? AssetValueAsOf { get; set; }
 
     public string Notes { get; set; } = string.Empty;
 

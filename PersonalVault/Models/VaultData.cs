@@ -33,4 +33,24 @@ public class VaultData
     /// reasoning as CustomCategoryFields above.
     /// </summary>
     public Dictionary<string, CategoryDefault> CustomCategoryDefaults { get; set; } = new();
+
+    /// <summary>
+    /// User-configured field sets per category - see Profile -> "Field Sets..." and
+    /// Models/AccountEntry.cs -> CategoryFieldSetDefaults for the full picture (built-in
+    /// fallback, reserved vs. custom captions, why hiding a field never deletes its
+    /// value). Key "[Defaults]" (CategoryFieldSetDefaults.DefaultsKey) applies to any
+    /// category with no entry of its own here. Keys matched case-insensitively in code,
+    /// same reasoning as CustomCategoryFields/CustomCategoryDefaults above.
+    /// </summary>
+    public Dictionary<string, List<FieldDefinition>> CategoryFieldSets { get; set; } = new();
+
+    /// <summary>
+    /// User-configured Asset/Liability classification per category - see Profile ->
+    /// "Field Sets..." and Models/AccountEntry.cs -> CategoryBalanceTypeDefaults for the
+    /// built-in fallback and why this exists (a loan's remaining balance is a debt, not
+    /// cash on hand). Takes priority over the built-in classification for the same
+    /// category. Keys matched case-insensitively in code, same reasoning as the other
+    /// per-category dictionaries above.
+    /// </summary>
+    public Dictionary<string, BalanceType> CustomCategoryBalanceTypes { get; set; } = new();
 }

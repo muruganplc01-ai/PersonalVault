@@ -44,7 +44,7 @@ public class ProfileForm : Form
     private readonly TextBox _nameBox = new() { Location = new Point(20, 182), Width = 340 };
     private readonly TextBox _browserPathBox = new() { Location = new Point(20, 268), Width = 250, ReadOnly = true };
     private readonly TextBox _gitHubUsernameBox = new() { Location = new Point(20, 350), Width = 250 };
-    private readonly TextBox _dataFolderBox = new() { Location = new Point(20, 716), Width = 250, ReadOnly = true };
+    private readonly TextBox _dataFolderBox = new() { Location = new Point(20, 805), Width = 250, ReadOnly = true };
 
     /// <summary>
     /// The chosen default-browser .exe path, or null to mean "use Windows' normal
@@ -62,6 +62,7 @@ public class ProfileForm : Form
     private readonly Action<string>? _changeDataFolder;
     private readonly Action? _openMfaSetup;
     private readonly Action? _openCategoryDefaults;
+    private readonly Action? _openCategoryFieldSets;
     private readonly Label _mfaStatusLabel = new() { AutoSize = true, Location = new Point(20, 596), ForeColor = Color.DimGray };
 
     /// <summary>
@@ -81,17 +82,19 @@ public class ProfileForm : Form
         string? currentDataFolder = null,
         Action<string>? changeDataFolder = null,
         Action? openMfaSetup = null,
-        Action? openCategoryDefaults = null)
+        Action? openCategoryDefaults = null,
+        Action? openCategoryFieldSets = null)
     {
         _profile = profile;
         _changeMasterSecret = changeMasterSecret;
         _changeDataFolder = changeDataFolder;
         _openMfaSetup = openMfaSetup;
         _openCategoryDefaults = openCategoryDefaults;
+        _openCategoryFieldSets = openCategoryFieldSets;
 
         Text = "Your Profile";
         Width = 400;
-        Height = 930;
+        Height = 1020;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MaximizeBox = false;
@@ -185,8 +188,23 @@ public class ProfileForm : Form
             ForeColor = Color.DimGray
         });
 
-        Controls.Add(new Label { Text = "Data folder:", AutoSize = true, Location = new Point(20, 696) });
-        var openFolderBtn = new Button { Text = "Open Folder", AutoSize = true, Location = new Point(280, 715) };
+        Controls.Add(new Label { Text = "Field sets:", AutoSize = true, Location = new Point(20, 696) });
+        var fieldSetsButton = new Button { Text = "Field Sets...", AutoSize = true, Location = new Point(20, 716), Visible = _openCategoryFieldSets != null };
+        fieldSetsButton.Click += (_, _) => _openCategoryFieldSets?.Invoke();
+        Controls.Add(fieldSetsButton);
+        Controls.Add(new Label
+        {
+            Text = "Choose which fields appear in Account Details per category (e.g. hide Due " +
+                   "Date/Amount Due for credential-only entries like Email).",
+            AutoSize = false,
+            Location = new Point(20, 738),
+            Width = 350,
+            Height = 28,
+            ForeColor = Color.DimGray
+        });
+
+        Controls.Add(new Label { Text = "Data folder:", AutoSize = true, Location = new Point(20, 786) });
+        var openFolderBtn = new Button { Text = "Open Folder", AutoSize = true, Location = new Point(280, 805) };
         openFolderBtn.Click += (_, _) => OpenDataFolder();
         Controls.Add(_dataFolderBox);
         Controls.Add(openFolderBtn);
@@ -195,7 +213,7 @@ public class ProfileForm : Form
         {
             Text = "Change Data Folder...",
             AutoSize = true,
-            Location = new Point(20, 746),
+            Location = new Point(20, 836),
             Visible = _changeDataFolder != null
         };
         changeFolderBtn.Click += (_, _) => ChangeDataFolder();
@@ -205,14 +223,14 @@ public class ProfileForm : Form
             Text = "Copies everything (vault, settings, Google Drive sign-in) to the new folder. " +
                    "The current folder is left in place as a backup - nothing is deleted.",
             AutoSize = false,
-            Location = new Point(20, 776),
+            Location = new Point(20, 866),
             Width = 350,
             Height = 40,
             ForeColor = Color.DimGray
         });
 
-        var cancelButton = new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel, Location = new Point(230, 835) };
-        var saveButton = new Button { Text = "Save", AutoSize = true, Location = new Point(315, 835) };
+        var cancelButton = new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel, Location = new Point(230, 925) };
+        var saveButton = new Button { Text = "Save", AutoSize = true, Location = new Point(315, 925) };
         saveButton.Click += SaveButton_Click;
         Controls.Add(cancelButton);
         Controls.Add(saveButton);
