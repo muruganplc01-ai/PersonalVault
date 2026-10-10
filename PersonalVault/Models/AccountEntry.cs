@@ -195,11 +195,11 @@ public static class CategoryFieldSetDefaults
                 "Due Date", "Amount Due", "Current Balance", "Notes", "Extra Info"),
 
             ["Mortgage"] = Fields("Name", "Institution", "Owner", "Sub Category",
-                "Username", "Password", "Website", "Phone",
+                "Username", "Password", "Account #", "Website", "Phone",
                 "Due Date", "Amount Due", "Current Balance", "Asset Value", "Maturity Date", "Notes", "Extra Info"),
 
             ["CarLoan"] = Fields("Name", "Institution", "Owner", "Sub Category",
-                "Username", "Password", "Website", "Phone",
+                "Username", "Password", "Account #", "Website", "Phone",
                 "Due Date", "Amount Due", "Current Balance", "Asset Value", "Maturity Date", "Notes", "Extra Info"),
 
             ["ApartmentRental"] = Fields("Name", "Institution", "Owner", "Sub Category",
