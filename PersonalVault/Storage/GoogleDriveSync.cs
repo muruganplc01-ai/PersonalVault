@@ -42,8 +42,38 @@ public class GoogleDriveSync
     /// </summary>
     public const string ShareFilePrefix = "PersonalVaultShare-";
 
+    /// <summary>
+    /// Dated backup copies (see BackupBeforeOverwriteAsync) are filed into a folder with
+    /// this name instead of landing loose in Drive's root.
+    /// </summary>
+    public const string BackupFolderName = "Backup";
+
+    /// <summary>
+    /// The live vault/payments/settings files (and, moved in once by hand, credentials.json)
+    /// live in this folder - a full disaster-recovery kit in one place rather than loose
+    /// in Drive's root.
+    /// </summary>
+    public const string DataFolderName = "PersonalVaultData";
+
+    /// <summary>
+    /// Active one-time "Share Account" link files (see UploadShareAsync) are filed here
+    /// instead of landing loose in Drive's root. Distinct from DataFolderName/
+    /// BackupFolderName/Sharing (the friend-onboarding package folder) - this one is
+    /// just where short-lived share links live while active.
+    /// </summary>
+    public const string SharesFolderName = "Shares";
+
     private DriveService? _service;
     private UserCredential? _credential;
+
+    /// <summary>Cached for the lifetime of this DriveService instance (a fresh sign-in gets a fresh one) - see GetOrCreateBackupFolderAsync.</summary>
+    private string? _backupFolderId;
+
+    /// <summary>Cached for the lifetime of this DriveService instance - see GetOrCreateDataFolderAsync.</summary>
+    private string? _dataFolderId;
+
+    /// <summary>Cached for the lifetime of this DriveService instance - see GetOrCreateSharesFolderAsync.</summary>
+    private string? _sharesFolderId;
 
     public bool IsAuthenticated => _service != null;
 
@@ -269,8 +299,9 @@ public class GoogleDriveSync
             else
             {
                 var newFileName = remoteFileName ?? RemoteFileName;
-                DebugLog.Write($"UploadOrUpdateAsync: creating new Drive file named '{newFileName}'...");
-                var metadata = new DriveFile { Name = newFileName };
+                var folderId = await GetOrCreateDataFolderAsync();
+                DebugLog.Write($"UploadOrUpdateAsync: creating new Drive file named '{newFileName}' in folder '...{Suffix(folderId)}'...");
+                var metadata = new DriveFile { Name = newFileName, Parents = new List<string> { folderId } };
                 var createRequest = _service!.Files.Create(metadata, stream, "application/octet-stream");
                 createRequest.Fields = "id";
                 var progress = await createRequest.UploadAsync();
@@ -315,9 +346,10 @@ public class GoogleDriveSync
             string stamp = DateTime.Now.ToString("yyyy-MM-dd-HHmmss");
             string backupName = $"{nameNoExt}-backup-{stamp}{ext}";
 
-            var copyRequest = _service.Files.Copy(new DriveFile { Name = backupName }, existingFileId);
+            var folderId = await GetOrCreateBackupFolderAsync();
+            var copyRequest = _service.Files.Copy(new DriveFile { Name = backupName, Parents = new List<string> { folderId } }, existingFileId);
             await copyRequest.ExecuteAsync();
-            DebugLog.Write($"BackupBeforeOverwriteAsync: copied '...{Suffix(existingFileId)}' to dated backup '{backupName}'.");
+            DebugLog.Write($"BackupBeforeOverwriteAsync: copied '...{Suffix(existingFileId)}' to dated backup '{backupName}' in folder '...{Suffix(folderId)}'.");
 
             await PruneOldDatedBackupsAsync(nameNoExt);
         }
@@ -330,6 +362,48 @@ public class GoogleDriveSync
     }
 
     /// <summary>
+    /// Finds the dated-backups folder by name (created by this same app, so drive.file
+    /// scope can still see it even without the broader drive.readonly scope), creating
+    /// it the first time there isn't one yet. Cached in-memory for this DriveService
+    /// instance's lifetime - a fresh sign-in just re-finds the same folder by name
+    /// rather than risking a stale id if it were persisted and the user ever deleted/
+    /// renamed it by hand in Drive's own UI.
+    /// </summary>
+    private async Task<string> GetOrCreateBackupFolderAsync() => await GetOrCreateFolderAsync(BackupFolderName, id => _backupFolderId = id, () => _backupFolderId);
+
+    /// <summary>Same idea as GetOrCreateBackupFolderAsync, for the live vault/payments/settings files' home folder (DataFolderName).</summary>
+    private async Task<string> GetOrCreateDataFolderAsync() => await GetOrCreateFolderAsync(DataFolderName, id => _dataFolderId = id, () => _dataFolderId);
+
+    /// <summary>Same idea as GetOrCreateBackupFolderAsync, for active share-link files (SharesFolderName).</summary>
+    private async Task<string> GetOrCreateSharesFolderAsync() => await GetOrCreateFolderAsync(SharesFolderName, id => _sharesFolderId = id, () => _sharesFolderId);
+
+    private async Task<string> GetOrCreateFolderAsync(string folderName, Action<string> setCache, Func<string?> getCache)
+    {
+        var cached = getCache();
+        if (cached != null) return cached;
+
+        var listRequest = _service!.Files.List();
+        listRequest.Q = $"mimeType = 'application/vnd.google-apps.folder' and name = '{folderName}' and trashed = false";
+        listRequest.Fields = "files(id, name)";
+        var result = await listRequest.ExecuteAsync();
+
+        if (result.Files is { Count: > 0 })
+        {
+            setCache(result.Files[0].Id);
+            DebugLog.Write($"GetOrCreateFolderAsync('{folderName}'): found existing folder '...{Suffix(result.Files[0].Id)}'.");
+            return result.Files[0].Id;
+        }
+
+        var metadata = new DriveFile { Name = folderName, MimeType = "application/vnd.google-apps.folder" };
+        var createRequest = _service.Files.Create(metadata);
+        createRequest.Fields = "id";
+        var folder = await createRequest.ExecuteAsync();
+        setCache(folder.Id);
+        DebugLog.Write($"GetOrCreateFolderAsync('{folderName}'): created new folder '...{Suffix(folder.Id)}'.");
+        return folder.Id;
+    }
+
+    /// <summary>
     /// Deletes dated backup copies (see BackupBeforeOverwriteAsync) older than 7 days
     /// for the given base file name - same rolling window as PruneOldRevisionsAsync and
     /// the local backup folder (TrayApplicationContext.BackupLocalVaultBeforeOverwrite),
@@ -338,8 +412,9 @@ public class GoogleDriveSync
     /// </summary>
     private async Task PruneOldDatedBackupsAsync(string nameNoExt, int retainDays = 7)
     {
+        var folderId = await GetOrCreateBackupFolderAsync();
         var listRequest = _service!.Files.List();
-        listRequest.Q = $"name contains '{nameNoExt}-backup-' and trashed = false";
+        listRequest.Q = $"'{folderId}' in parents and name contains '{nameNoExt}-backup-' and trashed = false";
         // "createdTime" is the real Drive API v3 field name - CreatedTimeRaw below is
         // just the .NET client library's own property name for that same value
         // (the unparsed ISO 8601 string), not a field the server recognizes; asking the
@@ -387,8 +462,9 @@ public class GoogleDriveSync
 
         try
         {
+            var folderId = await GetOrCreateSharesFolderAsync();
             using var stream = new MemoryStream(blob);
-            var metadata = new DriveFile { Name = fileName };
+            var metadata = new DriveFile { Name = fileName, Parents = new List<string> { folderId } };
             var createRequest = _service!.Files.Create(metadata, stream, "application/octet-stream");
             createRequest.Fields = "id";
             var progress = await createRequest.UploadAsync();
