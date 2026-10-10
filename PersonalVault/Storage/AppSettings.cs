@@ -59,6 +59,27 @@ public class AppSettings
     /// </summary>
     public bool DebugLoggingEnabled { get; set; } = false;
 
+    /// <summary>
+    /// If true, a dated backup copy (see GoogleDriveSync.BackupBeforeOverwriteAsync) is
+    /// created on every single save that syncs to Drive. If false (the default),
+    /// backups are throttled to at most once per hour - LastBackupUtc below records
+    /// when the last one actually happened, and a save sooner than an hour after that
+    /// skips creating a new one. Saves can happen far more often than that during an
+    /// active editing session, and a fresh dated copy every few minutes adds little real
+    /// recovery value over the one from a few minutes ago.
+    /// </summary>
+    public bool BackupOnEverySave { get; set; } = false;
+
+    /// <summary>When the last dated backup copy was actually created (UTC) - used to enforce the throttle below. Null means "never backed up yet," which always backs up the first time regardless of the flag.</summary>
+    public DateTime? LastBackupUtc { get; set; }
+
+    /// <summary>
+    /// How many minutes must pass since the last dated backup before another one is
+    /// created, when BackupOnEverySave is off. Defaults to 60 (once an hour). Has no
+    /// effect at all when BackupOnEverySave is on (every save backs up regardless).
+    /// </summary>
+    public int BackupThrottleMinutes { get; set; } = 60;
+
     public static AppSettings Load()
     {
         try

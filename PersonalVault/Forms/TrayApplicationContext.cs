@@ -898,7 +898,11 @@ public class TrayApplicationContext : ApplicationContext
                 ShareAccountAsync,
                 (title, message) => Notify(title, message),
                 GetDebugLoggingEnabled,
-                SetDebugLoggingEnabled);
+                SetDebugLoggingEnabled,
+                GetBackupOnEverySave,
+                SetBackupOnEverySave,
+                GetBackupThrottleMinutes,
+                SetBackupThrottleMinutes);
             _mainForm.FormClosing += (_, e) =>
             {
                 // Closing the window just hides it - the app keeps running in the tray
@@ -992,7 +996,9 @@ public class TrayApplicationContext : ApplicationContext
             _driveFileId ??= await _drive.FindVaultFileIdAsync();
             DebugLog.Write($"UploadToDriveAsync: resolved _driveFileId={(_driveFileId == null ? "(null - will create new file)" : "set")}.");
 
-            _driveFileId = await _drive.UploadOrUpdateAsync(AppPaths.VaultLocalPath, _driveFileId);
+            bool shouldBackup = ShouldCreateBackupNow();
+            _driveFileId = await _drive.UploadOrUpdateAsync(AppPaths.VaultLocalPath, _driveFileId, createBackup: shouldBackup);
+            if (shouldBackup) MarkBackupCreated();
             _settings.DriveFileId = _driveFileId;
             _settings.Save();
             DebugLog.Write("UploadToDriveAsync: upload call returned without throwing - upload succeeded.");
@@ -1044,8 +1050,10 @@ public class TrayApplicationContext : ApplicationContext
                 ?? await _drive.FindFileIdAsync(GoogleDriveSync.RemotePaymentsFileName);
             DebugLog.Write($"UploadPaymentsToDriveAsync: resolved _paymentsDriveFileId={(_paymentsDriveFileId == null ? "(null - will create new file)" : "set")}.");
 
+            bool shouldBackup = ShouldCreateBackupNow();
             _paymentsDriveFileId = await _drive.UploadOrUpdateAsync(
-                AppPaths.PaymentsLocalPath, _paymentsDriveFileId, GoogleDriveSync.RemotePaymentsFileName);
+                AppPaths.PaymentsLocalPath, _paymentsDriveFileId, GoogleDriveSync.RemotePaymentsFileName, createBackup: shouldBackup);
+            if (shouldBackup) MarkBackupCreated();
             _settings.PaymentsDriveFileId = _paymentsDriveFileId;
             _settings.Save();
             DebugLog.Write("UploadPaymentsToDriveAsync: upload call returned without throwing - upload succeeded.");
@@ -1149,6 +1157,44 @@ public class TrayApplicationContext : ApplicationContext
         SaveSettings();
     }
 
+    /// <summary>Profile's "Back up on every save" checkbox - see AppSettings.BackupOnEverySave/LastBackupUtc.</summary>
+    private bool GetBackupOnEverySave() => _settings.BackupOnEverySave;
+
+    private void SetBackupOnEverySave(bool enabled)
+    {
+        DebugLog.Write($"SetBackupOnEverySave: {enabled}.");
+        _settings.BackupOnEverySave = enabled;
+        SaveSettings();
+    }
+
+    /// <summary>Profile's "minutes between backups" field - only takes effect when BackupOnEverySave is off. See AppSettings.BackupThrottleMinutes.</summary>
+    private int GetBackupThrottleMinutes() => _settings.BackupThrottleMinutes;
+
+    private void SetBackupThrottleMinutes(int minutes)
+    {
+        DebugLog.Write($"SetBackupThrottleMinutes: {minutes}.");
+        _settings.BackupThrottleMinutes = minutes;
+        SaveSettings();
+    }
+
+    /// <summary>
+    /// Whether THIS save should create a dated Drive backup - true if the "Back up on
+    /// every save" flag is on, if there's never been one yet, or if BackupThrottleMinutes
+    /// have passed since the last one. Called before each of the 3 UploadOrUpdateAsync
+    /// call sites (vault/payments/settings) - see MarkBackupCreated for the other half.
+    /// </summary>
+    private bool ShouldCreateBackupNow() =>
+        _settings.BackupOnEverySave
+        || _settings.LastBackupUtc == null
+        || (DateTime.UtcNow - _settings.LastBackupUtc.Value) >= TimeSpan.FromMinutes(_settings.BackupThrottleMinutes);
+
+    /// <summary>Records that a backup was just created, for ShouldCreateBackupNow's hourly throttle - plain Save() (not SaveSettings()) so this doesn't trigger another settings upload of itself.</summary>
+    private void MarkBackupCreated()
+    {
+        _settings.LastBackupUtc = DateTime.UtcNow;
+        _settings.Save();
+    }
+
     /// <summary>
     /// Called from ProfileForm (Save) when the "GitHub username" field changed. Unlike
     /// SetDefaultBrowserPath, this goes through SaveSettings() the same way but the
@@ -1202,8 +1248,10 @@ public class TrayApplicationContext : ApplicationContext
                 ?? await _drive.FindFileIdAsync(GoogleDriveSync.RemoteSettingsFileName);
             DebugLog.Write($"UploadSettingsToDriveAsync: resolved _settingsDriveFileId={(_settingsDriveFileId == null ? "(null - will create new file)" : "set")}.");
 
+            bool shouldBackup = ShouldCreateBackupNow();
             _settingsDriveFileId = await _drive.UploadOrUpdateAsync(
-                AppPaths.SettingsPath, _settingsDriveFileId, GoogleDriveSync.RemoteSettingsFileName);
+                AppPaths.SettingsPath, _settingsDriveFileId, GoogleDriveSync.RemoteSettingsFileName, createBackup: shouldBackup);
+            if (shouldBackup) MarkBackupCreated();
 
             // Cache the id with a plain Save() (not SaveSettings()) so this doesn't
             // trigger another upload of itself.

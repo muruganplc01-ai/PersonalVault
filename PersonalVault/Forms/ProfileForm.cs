@@ -41,11 +41,24 @@ public class ProfileForm : Form
         SizeMode = PictureBoxSizeMode.Zoom,
         BorderStyle = BorderStyle.FixedSingle
     };
-    private readonly TextBox _nameBox = new() { Location = new Point(20, 182), Width = 340 };
-    private readonly TextBox _browserPathBox = new() { Location = new Point(20, 268), Width = 250, ReadOnly = true };
-    private readonly TextBox _gitHubUsernameBox = new() { Location = new Point(20, 350), Width = 250 };
-    private readonly TextBox _dataFolderBox = new() { Location = new Point(20, 805), Width = 250, ReadOnly = true };
-    private readonly CheckBox _debugLoggingBox = new() { Text = "Enable diagnostic logging", AutoSize = true, Location = new Point(20, 945) };
+    // Shared layout constants for the "label/description on the left, action button
+    // beside it on the right" pattern used throughout this form - widened once (see
+    // Width below) specifically so a button never has to sit stacked under its own
+    // description any more.
+    private const int ColX = 20;
+    private const int TextW = 400;
+    private const int ButtonX = 440;
+
+    private readonly TextBox _nameBox = new() { Location = new Point(ColX, 182), Width = TextW };
+    private readonly TextBox _browserPathBox = new() { Location = new Point(ColX, 268), Width = 250, ReadOnly = true };
+    private readonly TextBox _gitHubUsernameBox = new() { Location = new Point(ColX, 330), Width = TextW };
+    private readonly TextBox _dataFolderBox = new() { Location = new Point(ColX, 726), Width = TextW, ReadOnly = true };
+    private readonly CheckBox _debugLoggingBox = new() { Text = "Enable diagnostic logging", AutoSize = true, Location = new Point(ColX, 836) };
+    private readonly CheckBox _backupOnEverySaveBox = new() { Text = "Back up on every save", AutoSize = true, Location = new Point(ColX, 920) };
+    private readonly NumericUpDown _backupThrottleMinutesBox = new()
+    {
+        Location = new Point(220, 942), Width = 70, Minimum = 1, Maximum = 1440, Value = 60
+    };
 
     /// <summary>
     /// The chosen default-browser .exe path, or null to mean "use Windows' normal
@@ -62,12 +75,18 @@ public class ProfileForm : Form
     /// <summary>Same pattern as SelectedBrowserPath, for AppSettings.DebugLoggingEnabled.</summary>
     public bool DebugLoggingEnabled { get; private set; }
 
+    /// <summary>Same pattern as SelectedBrowserPath, for AppSettings.BackupOnEverySave.</summary>
+    public bool BackupOnEverySave { get; private set; }
+
+    /// <summary>Same pattern as SelectedBrowserPath, for AppSettings.BackupThrottleMinutes.</summary>
+    public int BackupThrottleMinutes { get; private set; }
+
     private readonly Func<Task>? _changeMasterSecret;
     private readonly Action<string>? _changeDataFolder;
     private readonly Action? _openMfaSetup;
     private readonly Action? _openCategoryDefaults;
     private readonly Action? _openCategoryFieldSets;
-    private readonly Label _mfaStatusLabel = new() { AutoSize = true, Location = new Point(20, 596), ForeColor = Color.DimGray };
+    private readonly Label _mfaStatusLabel = new() { AutoSize = true, Location = new Point(ColX, 534), ForeColor = Color.DimGray };
 
     /// <summary>
     /// changeMasterSecret is TrayApplicationContext.ChangeSecret, passed in so the
@@ -88,7 +107,9 @@ public class ProfileForm : Form
         Action? openMfaSetup = null,
         Action? openCategoryDefaults = null,
         Action? openCategoryFieldSets = null,
-        bool currentDebugLoggingEnabled = false)
+        bool currentDebugLoggingEnabled = false,
+        bool currentBackupOnEverySave = false,
+        int currentBackupThrottleMinutes = 60)
     {
         _profile = profile;
         _changeMasterSecret = changeMasterSecret;
@@ -98,8 +119,8 @@ public class ProfileForm : Form
         _openCategoryFieldSets = openCategoryFieldSets;
 
         Text = "Your Profile";
-        Width = 400;
-        Height = 1075;
+        Width = 650;
+        Height = 1150;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MaximizeBox = false;
@@ -119,51 +140,54 @@ public class ProfileForm : Form
         Controls.Add(chooseBtn);
         Controls.Add(removeBtn);
 
-        Controls.Add(new Label { Text = "Name:", AutoSize = true, Location = new Point(20, 162) });
+        Controls.Add(new Label { Text = "Name:", AutoSize = true, Location = new Point(ColX, 162) });
         Controls.Add(_nameBox);
 
-        Controls.Add(new Label { Text = "Default browser:", AutoSize = true, Location = new Point(20, 220) });
+        // Default browser: textbox + both its buttons share one row (beside, not
+        // stacked under) - this one already doesn't fit the generic "description +
+        // single button on the right" pattern below since it has two buttons.
+        Controls.Add(new Label { Text = "Default browser:", AutoSize = true, Location = new Point(ColX, 215) });
         Controls.Add(new Label
         {
             Text = "Used when opening a website link from Personal Vault. Leave blank to use Windows' normal default browser.",
             AutoSize = false,
-            Location = new Point(20, 240),
-            Width = 350,
+            Location = new Point(ColX, 235),
+            Width = TextW,
             Height = 30,
             ForeColor = Color.DimGray
         });
 
         var browseBrowserBtn = new Button { Text = "Browse...", AutoSize = true, Location = new Point(280, 267) };
-        var useSystemDefaultBtn = new Button { Text = "Use System Default", AutoSize = true, Location = new Point(20, 296) };
+        var useSystemDefaultBtn = new Button { Text = "Use System Default", AutoSize = true, Location = new Point(370, 267) };
         browseBrowserBtn.Click += BrowseBrowserBtn_Click;
         useSystemDefaultBtn.Click += (_, _) => _browserPathBox.Text = string.Empty;
         Controls.Add(_browserPathBox);
         Controls.Add(browseBrowserBtn);
         Controls.Add(useSystemDefaultBtn);
 
-        Controls.Add(new Label { Text = "GitHub username (for Share links):", AutoSize = true, Location = new Point(20, 332) });
+        Controls.Add(new Label { Text = "GitHub username (for Share links):", AutoSize = true, Location = new Point(ColX, 310) });
         Controls.Add(_gitHubUsernameBox);
         Controls.Add(new Label
         {
             Text = "Used to build \"Share Account\" links: https://<username>.github.io/PersonalVault/share/. " +
                    "Leave blank to disable the Share... button. See README for one-time GitHub Pages setup.",
             AutoSize = false,
-            Location = new Point(20, 378),
-            Width = 350,
-            Height = 58,
+            Location = new Point(ColX, 356),
+            Width = TextW,
+            Height = 66,
             ForeColor = Color.DimGray
         });
 
-        var masterPasswordLabel = new Label { Text = "Master password:", AutoSize = true, Location = new Point(20, 448), Visible = _changeMasterSecret != null };
-        var changeSecretButton = new Button { Text = "Change Master Password...", AutoSize = true, Location = new Point(20, 468), Visible = _changeMasterSecret != null };
+        var masterPasswordLabel = new Label { Text = "Master password:", AutoSize = true, Location = new Point(ColX, 442), Visible = _changeMasterSecret != null };
+        var changeSecretButton = new Button { Text = "Change Master Password...", AutoSize = true, Location = new Point(ButtonX, 440), Visible = _changeMasterSecret != null };
         changeSecretButton.Click += async (_, _) => { if (_changeMasterSecret != null) await _changeMasterSecret(); };
         var changeSecretNote = new Label
         {
             Text = "Re-encrypts your entire vault under a new secret. You'll be asked for the " +
                    "current one first.",
             AutoSize = false,
-            Location = new Point(20, 498),
-            Width = 350,
+            Location = new Point(ColX, 462),
+            Width = TextW,
             Height = 32,
             ForeColor = Color.DimGray,
             Visible = _changeMasterSecret != null
@@ -172,14 +196,14 @@ public class ProfileForm : Form
         Controls.Add(changeSecretButton);
         Controls.Add(changeSecretNote);
 
-        Controls.Add(new Label { Text = "Two-factor authentication:", AutoSize = true, Location = new Point(20, 546) });
-        var mfaButton = new Button { Text = "Two-Factor Authentication...", AutoSize = true, Location = new Point(20, 566), Visible = _openMfaSetup != null };
+        Controls.Add(new Label { Text = "Two-factor authentication:", AutoSize = true, Location = new Point(ColX, 514) });
+        var mfaButton = new Button { Text = "Two-Factor Authentication...", AutoSize = true, Location = new Point(ButtonX, 512), Visible = _openMfaSetup != null };
         mfaButton.Click += (_, _) => { _openMfaSetup?.Invoke(); UpdateMfaStatusLabel(); };
         Controls.Add(mfaButton);
         Controls.Add(_mfaStatusLabel);
 
-        Controls.Add(new Label { Text = "Category defaults:", AutoSize = true, Location = new Point(20, 616) });
-        var categoryDefaultsButton = new Button { Text = "Category Defaults...", AutoSize = true, Location = new Point(20, 636), Visible = _openCategoryDefaults != null };
+        Controls.Add(new Label { Text = "Category defaults:", AutoSize = true, Location = new Point(ColX, 570) });
+        var categoryDefaultsButton = new Button { Text = "Category Defaults...", AutoSize = true, Location = new Point(ButtonX, 568), Visible = _openCategoryDefaults != null };
         categoryDefaultsButton.Click += (_, _) => _openCategoryDefaults?.Invoke();
         Controls.Add(categoryDefaultsButton);
         Controls.Add(new Label
@@ -187,14 +211,14 @@ public class ProfileForm : Form
             Text = "Set your own Repeats/Autopay/Institution starting values per category, " +
                    "applied automatically when you add a new entry.",
             AutoSize = false,
-            Location = new Point(20, 658),
-            Width = 350,
+            Location = new Point(ColX, 590),
+            Width = TextW,
             Height = 28,
             ForeColor = Color.DimGray
         });
 
-        Controls.Add(new Label { Text = "Field sets:", AutoSize = true, Location = new Point(20, 696) });
-        var fieldSetsButton = new Button { Text = "Field Sets...", AutoSize = true, Location = new Point(20, 716), Visible = _openCategoryFieldSets != null };
+        Controls.Add(new Label { Text = "Field sets:", AutoSize = true, Location = new Point(ColX, 638) });
+        var fieldSetsButton = new Button { Text = "Field Sets...", AutoSize = true, Location = new Point(ButtonX, 636), Visible = _openCategoryFieldSets != null };
         fieldSetsButton.Click += (_, _) => _openCategoryFieldSets?.Invoke();
         Controls.Add(fieldSetsButton);
         Controls.Add(new Label
@@ -202,14 +226,14 @@ public class ProfileForm : Form
             Text = "Choose which fields appear in Account Details per category (e.g. hide Due " +
                    "Date/Amount Due for credential-only entries like Email).",
             AutoSize = false,
-            Location = new Point(20, 738),
-            Width = 350,
+            Location = new Point(ColX, 658),
+            Width = TextW,
             Height = 28,
             ForeColor = Color.DimGray
         });
 
-        Controls.Add(new Label { Text = "Data folder:", AutoSize = true, Location = new Point(20, 786) });
-        var openFolderBtn = new Button { Text = "Open Folder", AutoSize = true, Location = new Point(280, 805) };
+        Controls.Add(new Label { Text = "Data folder:", AutoSize = true, Location = new Point(ColX, 706) });
+        var openFolderBtn = new Button { Text = "Open Folder", AutoSize = true, Location = new Point(ButtonX, 725) };
         openFolderBtn.Click += (_, _) => OpenDataFolder();
         Controls.Add(_dataFolderBox);
         Controls.Add(openFolderBtn);
@@ -218,7 +242,7 @@ public class ProfileForm : Form
         {
             Text = "Change Data Folder...",
             AutoSize = true,
-            Location = new Point(20, 836),
+            Location = new Point(ButtonX, 754),
             Visible = _changeDataFolder != null
         };
         changeFolderBtn.Click += (_, _) => ChangeDataFolder();
@@ -228,26 +252,52 @@ public class ProfileForm : Form
             Text = "Copies everything (vault, settings, Google Drive sign-in) to the new folder. " +
                    "The current folder is left in place as a backup - nothing is deleted.",
             AutoSize = false,
-            Location = new Point(20, 866),
-            Width = 350,
+            Location = new Point(ColX, 756),
+            Width = TextW,
             Height = 40,
             ForeColor = Color.DimGray
         });
 
-        Controls.Add(new Label { Text = "Diagnostics:", AutoSize = true, Location = new Point(20, 925) });
+        Controls.Add(new Label { Text = "Diagnostics:", AutoSize = true, Location = new Point(ColX, 816) });
         Controls.Add(_debugLoggingBox);
         Controls.Add(new Label
         {
             Text = "Saves activity to a log file next to the app, for troubleshooting.",
             AutoSize = false,
-            Location = new Point(20, 968),
-            Width = 350,
+            Location = new Point(ColX, 860),
+            Width = TextW,
             Height = 30,
             ForeColor = Color.DimGray
         });
 
-        var cancelButton = new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel, Location = new Point(230, 1010) };
-        var saveButton = new Button { Text = "Save", AutoSize = true, Location = new Point(315, 1010) };
+        Controls.Add(new Label { Text = "Backups:", AutoSize = true, Location = new Point(ColX, 900) });
+        Controls.Add(_backupOnEverySaveBox);
+
+        var backupMinutesLabel = new Label { Text = "Minutes between backups:", AutoSize = true, Location = new Point(ColX, 946) };
+        Controls.Add(backupMinutesLabel);
+        Controls.Add(_backupThrottleMinutesBox);
+        // Grayed out whenever "Back up on every save" is checked, since the throttle
+        // has no effect at all in that case - makes the dependency between the two
+        // settings visible instead of just explained in a description underneath.
+        _backupOnEverySaveBox.CheckedChanged += (_, _) =>
+        {
+            backupMinutesLabel.Enabled = !_backupOnEverySaveBox.Checked;
+            _backupThrottleMinutesBox.Enabled = !_backupOnEverySaveBox.Checked;
+        };
+
+        Controls.Add(new Label
+        {
+            Text = "Only applies when \"Back up on every save\" above is unchecked. A new dated " +
+                   "backup is skipped if the last one is more recent than this.",
+            AutoSize = false,
+            Location = new Point(ColX, 972),
+            Width = TextW,
+            Height = 30,
+            ForeColor = Color.DimGray
+        });
+
+        var cancelButton = new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel, Location = new Point(480, 1024) };
+        var saveButton = new Button { Text = "Save", AutoSize = true, Location = new Point(565, 1024) };
         saveButton.Click += SaveButton_Click;
         Controls.Add(cancelButton);
         Controls.Add(saveButton);
@@ -260,6 +310,9 @@ public class ProfileForm : Form
         _gitHubUsernameBox.Text = currentGitHubUsername ?? string.Empty;
         _dataFolderBox.Text = currentDataFolder ?? string.Empty;
         _debugLoggingBox.Checked = currentDebugLoggingEnabled;
+        _backupOnEverySaveBox.Checked = currentBackupOnEverySave;
+        _backupThrottleMinutesBox.Value = Math.Min(_backupThrottleMinutesBox.Maximum, Math.Max(_backupThrottleMinutesBox.Minimum, currentBackupThrottleMinutes));
+        _backupThrottleMinutesBox.Enabled = !currentBackupOnEverySave;
         UpdateMfaStatusLabel();
         if (_profile.HasPicture)
         {
@@ -331,6 +384,8 @@ public class ProfileForm : Form
         GitHubUsername = string.IsNullOrEmpty(gitHubUsername) ? null : gitHubUsername;
 
         DebugLoggingEnabled = _debugLoggingBox.Checked;
+        BackupOnEverySave = _backupOnEverySaveBox.Checked;
+        BackupThrottleMinutes = (int)_backupThrottleMinutesBox.Value;
 
         DialogResult = DialogResult.OK;
     }

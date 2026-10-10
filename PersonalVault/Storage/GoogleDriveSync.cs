@@ -256,9 +256,12 @@ public class GoogleDriveSync
     /// Returns the file id. remoteFileName is only used when creating a brand-new file
     /// (an update keeps whatever name the existing file already has); defaults to
     /// RemoteFileName (the vault) when not specified, so existing callers don't need to
-    /// change - pass RemotePaymentsFileName for the payments file instead.
+    /// change - pass RemotePaymentsFileName for the payments file instead. createBackup
+    /// lets the caller skip BackupBeforeOverwriteAsync for this particular update - see
+    /// AppSettings.BackupOnEverySave/LastBackupUtc for the hourly-throttle decision
+    /// TrayApplicationContext makes before calling this.
     /// </summary>
-    public async Task<string> UploadOrUpdateAsync(string localFilePath, string? existingFileId, string? remoteFileName = null)
+    public async Task<string> UploadOrUpdateAsync(string localFilePath, string? existingFileId, string? remoteFileName = null, bool createBackup = true)
     {
         RequireAuthenticated();
 
@@ -281,7 +284,10 @@ public class GoogleDriveSync
 
             if (!string.IsNullOrEmpty(existingFileId))
             {
-                await BackupBeforeOverwriteAsync(existingFileId);
+                if (createBackup)
+                    await BackupBeforeOverwriteAsync(existingFileId);
+                else
+                    DebugLog.Write("UploadOrUpdateAsync: skipping dated backup for this save (throttled - BackupOnEverySave is off and less than an hour has passed since the last one).");
 
                 DebugLog.Write("UploadOrUpdateAsync: updating existing Drive file...");
                 var updateRequest = _service!.Files.Update(new DriveFile(), existingFileId, stream, "application/octet-stream");

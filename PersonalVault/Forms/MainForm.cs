@@ -31,6 +31,10 @@ public class MainForm : Form
     private readonly Action<string, string> _notify;
     private readonly Func<bool> _getDebugLoggingEnabled;
     private readonly Action<bool> _setDebugLoggingEnabled;
+    private readonly Func<bool> _getBackupOnEverySave;
+    private readonly Action<bool> _setBackupOnEverySave;
+    private readonly Func<int> _getBackupThrottleMinutes;
+    private readonly Action<int> _setBackupThrottleMinutes;
     private readonly ListView _listView;
     private readonly TextBox _searchBox;
     private readonly ComboBox _categoryFilter;
@@ -105,7 +109,11 @@ public class MainForm : Form
         Func<AccountEntry, TimeSpan, Task<string>> shareAccount,
         Action<string, string> notify,
         Func<bool> getDebugLoggingEnabled,
-        Action<bool> setDebugLoggingEnabled)
+        Action<bool> setDebugLoggingEnabled,
+        Func<bool> getBackupOnEverySave,
+        Action<bool> setBackupOnEverySave,
+        Func<int> getBackupThrottleMinutes,
+        Action<int> setBackupThrottleMinutes)
     {
         _vault = vault;
         _save = save;
@@ -125,6 +133,10 @@ public class MainForm : Form
         _notify = notify;
         _getDebugLoggingEnabled = getDebugLoggingEnabled;
         _setDebugLoggingEnabled = setDebugLoggingEnabled;
+        _getBackupOnEverySave = getBackupOnEverySave;
+        _setBackupOnEverySave = setBackupOnEverySave;
+        _getBackupThrottleMinutes = getBackupThrottleMinutes;
+        _setBackupThrottleMinutes = setBackupThrottleMinutes;
 
         Text = "Personal Vault";
         Width = 960;
@@ -773,6 +785,18 @@ public class MainForm : Form
             _listView.Items.Add(item);
         }
         _listView.EndUpdate();
+
+        // Auto-select the first row (if any) every time this list is rebuilt - on
+        // initial load and after every filter/search/add/edit/delete refresh - so
+        // Edit/Delete/Copy Username/Copy Password etc. work immediately without
+        // forcing a click first. Guarded for the empty-grid case (a filter/search
+        // that matches nothing), where there's simply nothing to select.
+        if (_listView.Items.Count > 0)
+        {
+            _listView.Items[0].Selected = true;
+            _listView.Items[0].Focused = true;
+            _listView.Items[0].EnsureVisible();
+        }
     }
 
     /// <summary>
@@ -1197,12 +1221,14 @@ public class MainForm : Form
 
     private void EditProfile()
     {
-        using var form = new ProfileForm(_vault.Profile, _getDefaultBrowserPath(), _getGitHubUsername(), _changeMasterSecret, _getDataFolder(), _changeDataFolder, _openMfaSetup, OpenCategoryDefaults, OpenCategoryFieldSets, _getDebugLoggingEnabled());
+        using var form = new ProfileForm(_vault.Profile, _getDefaultBrowserPath(), _getGitHubUsername(), _changeMasterSecret, _getDataFolder(), _changeDataFolder, _openMfaSetup, OpenCategoryDefaults, OpenCategoryFieldSets, _getDebugLoggingEnabled(), _getBackupOnEverySave(), _getBackupThrottleMinutes());
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             _setDefaultBrowserPath(form.SelectedBrowserPath);
             _setGitHubUsername(form.GitHubUsername);
             _setDebugLoggingEnabled(form.DebugLoggingEnabled);
+            _setBackupOnEverySave(form.BackupOnEverySave);
+            _setBackupThrottleMinutes(form.BackupThrottleMinutes);
             _save();
             ApplyFilter(); // Owner column defaults may be worth re-checking after a name change, cheap to just refresh.
         }
