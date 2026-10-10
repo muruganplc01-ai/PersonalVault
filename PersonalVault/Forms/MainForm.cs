@@ -1004,6 +1004,16 @@ public class MainForm : Form
     private AccountEntry? SelectedAccount() =>
         _listView.SelectedItems.Count > 0 ? _listView.SelectedItems[0].Tag as AccountEntry : null;
 
+    /// <summary>
+    /// Shown by Edit/Delete/Open URL/Copy Username/Copy Password/Share whenever nothing
+    /// is selected - in practice this only happens on an empty grid (a filter/search
+    /// that matches nothing, or a brand-new vault) now that the list auto-selects its
+    /// first row on load and every refresh, so there's otherwise always something
+    /// selected if any row exists.
+    /// </summary>
+    private void ShowSelectAccountMessage() =>
+        MessageBox.Show(this, "Select an account first.", "Personal Vault", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
     private void AddNew()
     {
         var entry = new AccountEntry();
@@ -1028,7 +1038,7 @@ public class MainForm : Form
     private void EditSelected()
     {
         var account = SelectedAccount();
-        if (account == null) return;
+        if (account == null) { ShowSelectAccountMessage(); return; }
 
         using var form = new AccountEditForm(account, _vault.Profile.Name, _getDefaultBrowserPath(), KnownCategories(), GetCustomCategoryFields, SaveCustomCategoryFields, getCustomCategoryDefault: GetCategoryDefault, saveCustomCategoryDefault: SaveCategoryDefault, knownOwners: KnownOwners(), getKnownSubCategories: KnownSubCategories, categoryFieldSets: _vault.CategoryFieldSets);
         if (form.ShowDialog(this) == DialogResult.OK)
@@ -1044,7 +1054,7 @@ public class MainForm : Form
     private void DeleteSelected()
     {
         var account = SelectedAccount();
-        if (account == null) return;
+        if (account == null) { ShowSelectAccountMessage(); return; }
 
         var result = MessageBox.Show(this, $"Delete '{account.Name}'? This cannot be undone.",
             "Personal Vault", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
@@ -1064,7 +1074,7 @@ public class MainForm : Form
     private void OpenSelectedUrl()
     {
         var account = SelectedAccount();
-        if (account == null) return;
+        if (account == null) { ShowSelectAccountMessage(); return; }
 
         var uri = BrowserLauncher.TryParseUrl(account.Website);
         if (uri == null)
@@ -1088,7 +1098,7 @@ public class MainForm : Form
     /// <summary>Same as OpenSelectedUrl, but for whatever's selected on the Dues tab instead of the Accounts tab.</summary>
     private void OpenSelectedDueUrl()
     {
-        if (_duesListView.SelectedItems.Count == 0) return;
+        if (_duesListView.SelectedItems.Count == 0) { ShowSelectAccountMessage(); return; }
         var account = (AccountEntry)_duesListView.SelectedItems[0].Tag!;
 
         var uri = BrowserLauncher.TryParseUrl(account.Website);
@@ -1113,7 +1123,7 @@ public class MainForm : Form
     private void CopyField(Func<AccountEntry, string> selector, string label)
     {
         var account = SelectedAccount();
-        if (account == null) return;
+        if (account == null) { ShowSelectAccountMessage(); return; }
 
         var value = selector(account);
         if (string.IsNullOrEmpty(value)) return;
@@ -1128,7 +1138,7 @@ public class MainForm : Form
     private void ShareSelected()
     {
         var account = SelectedAccount();
-        if (account == null) return;
+        if (account == null) { ShowSelectAccountMessage(); return; }
 
         using var form = new ShareAccountForm(account, _shareAccount);
         form.ShowDialog(this);
@@ -1169,10 +1179,24 @@ public class MainForm : Form
         try
         {
             CsvIO.Export(dialog.FileName, _vault.Accounts);
-            MessageBox.Show(this,
-                "Exported.\n\nImportant: this CSV file is plain, unencrypted text - every password is readable in it. " +
-                "Treat it as sensitive and delete it once you're done with it.",
-                "Personal Vault", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+
+            if (_vault.Accounts.Count == 0)
+            {
+                // Export always writes the header row regardless of account count, so
+                // this is still a genuinely useful, ready-made template - not an error.
+                MessageBox.Show(this,
+                    "There are no accounts to export yet, so an empty file with just the column " +
+                    "headers was created instead. You can fill it in by hand (or paste from " +
+                    "another source) and bring it back in with \"Import CSV...\".",
+                    "Personal Vault", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else
+            {
+                MessageBox.Show(this,
+                    "Exported.\n\nImportant: this CSV file is plain, unencrypted text - every password is readable in it. " +
+                    "Treat it as sensitive and delete it once you're done with it.",
+                    "Personal Vault", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
         catch (Exception ex)
         {
