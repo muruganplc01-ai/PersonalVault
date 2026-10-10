@@ -166,7 +166,7 @@ public static class CategoryFieldSetDefaults
     {
         "Name", "Institution", "Owner", "Sub Category", "Username", "Password",
         "Account #", "Website", "Phone", "Due Date", "Amount Due", "Current Balance", "Asset Value",
-        "Bank Accounts", "Card Details", "Notes", "Extra Info"
+        "Maturity Date", "Bank Accounts", "Card Details", "Notes", "Extra Info"
     };
 
     public const string DefaultsKey = "[Defaults]";
@@ -196,11 +196,11 @@ public static class CategoryFieldSetDefaults
 
             ["Mortgage"] = Fields("Name", "Institution", "Owner", "Sub Category",
                 "Username", "Password", "Website", "Phone",
-                "Due Date", "Amount Due", "Current Balance", "Asset Value", "Notes", "Extra Info"),
+                "Due Date", "Amount Due", "Current Balance", "Asset Value", "Maturity Date", "Notes", "Extra Info"),
 
             ["CarLoan"] = Fields("Name", "Institution", "Owner", "Sub Category",
                 "Username", "Password", "Website", "Phone",
-                "Due Date", "Amount Due", "Current Balance", "Asset Value", "Notes", "Extra Info"),
+                "Due Date", "Amount Due", "Current Balance", "Asset Value", "Maturity Date", "Notes", "Extra Info"),
 
             ["ApartmentRental"] = Fields("Name", "Institution", "Owner", "Sub Category",
                 "Username", "Password", "Website", "Phone", "Due Date", "Amount Due", "Notes", "Extra Info"),
@@ -396,6 +396,14 @@ public class AccountEntry
 
     /// <summary>The date AssetValue was accurate as of. Only meaningful when AssetValue is set.</summary>
     public DateTime? AssetValueAsOf { get; set; }
+
+    /// <summary>
+    /// When a loan is scheduled to be fully paid off - meant for Mortgage/CarLoan, but
+    /// not restricted to any particular category. Distinct from DueDate (the next
+    /// recurring payment) - this is the end of the loan term itself. Null means "not
+    /// tracked," same reasoning as every other optional date/amount here.
+    /// </summary>
+    public DateTime? MaturityDate { get; set; }
 
     public string Notes { get; set; } = string.Empty;
 

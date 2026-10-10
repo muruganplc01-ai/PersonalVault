@@ -103,6 +103,11 @@ public class AccountEditForm : Form
     {
         Dock = DockStyle.Fill, Format = DateTimePickerFormat.Short, Enabled = false
     };
+    private readonly CheckBox _hasMaturityDateBox = new() { Text = "Known", AutoSize = true, Anchor = AnchorStyles.Left };
+    private readonly DateTimePicker _maturityDatePicker = new()
+    {
+        Dock = DockStyle.Fill, Format = DateTimePickerFormat.Short, Enabled = false
+    };
     // AcceptsReturn = true is required here - without it, a multiline TextBox still
     // sends the Enter key up to the form's AcceptButton (Save) instead of inserting a
     // newline, so pressing Enter while typing Notes/Extra info would save-and-close
@@ -284,6 +289,16 @@ public class AccountEditForm : Form
         assetValuePanel.Controls.Add(_assetValueAsOfBox, 2, 0);
         AddFieldRow("Asset Value", "Asset value:", assetValuePanel);
 
+        // Maturity date: when a loan (Mortgage/CarLoan) is scheduled to be fully paid
+        // off - distinct from Due Date above, which is about the next recurring
+        // payment, not the end of the loan term.
+        var maturityDatePanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoSize = true };
+        maturityDatePanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        maturityDatePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        maturityDatePanel.Controls.Add(_hasMaturityDateBox, 0, 0);
+        maturityDatePanel.Controls.Add(_maturityDatePicker, 1, 0);
+        AddFieldRow("Maturity Date", "Maturity date:", maturityDatePanel);
+
         var notesPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoSize = true };
         notesPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         notesPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -347,6 +362,7 @@ public class AccountEditForm : Form
             _assetValueBox.Enabled = _hasAssetValueBox.Checked;
             _assetValueAsOfBox.Enabled = _hasAssetValueBox.Checked;
         };
+        _hasMaturityDateBox.CheckedChanged += (_, _) => _maturityDatePicker.Enabled = _hasMaturityDateBox.Checked;
 
         var scrollPanel = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
         scrollPanel.Controls.Add(_layout);
@@ -677,6 +693,18 @@ public class AccountEditForm : Form
             _assetValueBox.Enabled = false;
             _assetValueAsOfBox.Enabled = false;
         }
+
+        if (_entry.MaturityDate.HasValue)
+        {
+            _hasMaturityDateBox.Checked = true;
+            _maturityDatePicker.Enabled = true;
+            _maturityDatePicker.Value = _entry.MaturityDate.Value;
+        }
+        else
+        {
+            _hasMaturityDateBox.Checked = false;
+            _maturityDatePicker.Enabled = false;
+        }
     }
 
     private static decimal ClampToRange(NumericUpDown box, decimal value) =>
@@ -773,6 +801,9 @@ public class AccountEditForm : Form
             _entry.AssetValue = _hasAssetValueBox.Checked ? _assetValueBox.Value : null;
             _entry.AssetValueAsOf = _hasAssetValueBox.Checked ? _assetValueAsOfBox.Value.Date : null;
         }
+
+        if (IsFieldVisible("Maturity Date"))
+            _entry.MaturityDate = _hasMaturityDateBox.Checked ? _maturityDatePicker.Value.Date : null;
 
         _entry.SubAccounts = _workingSubAccounts;
 
@@ -1002,13 +1033,13 @@ public class AccountEditForm : Form
     };
 
     /// <summary>
-    /// Opens the structured Card Details popup (see cc.png-style Card
-    /// Number/Expiration/Security Code/Cardholder Name layout in CreditCardDetailsForm),
-    /// pre-filled from the Account # field and whatever's already in Extra info. On
-    /// Save, the card number overwrites Account # (so it shows up in the same place any
-    /// other account's identifying number does) and the other four values are merged
-    /// into Extra info - nothing here is a new AccountEntry field, so older vault data
-    /// isn't affected either way.
+    /// Opens the structured Card Details popup (see cc.png-style Card Number/Expiration/
+    /// Security Code/Cardholder Name/Credit Limit/Date Opened layout in
+    /// CreditCardDetailsForm), pre-filled from the Account # field and whatever's
+    /// already in Extra info. On Save, the card number overwrites Account # (so it shows
+    /// up in the same place any other account's identifying number does) and the other
+    /// values are merged into Extra info - nothing here is a new AccountEntry field, so
+    /// older vault data isn't affected either way.
     /// </summary>
     private void OpenCardDetails()
     {
@@ -1018,7 +1049,9 @@ public class AccountEditForm : Form
             extraFields.GetValueOrDefault("Expiration Month", string.Empty),
             extraFields.GetValueOrDefault("Expiration Year", string.Empty),
             extraFields.GetValueOrDefault("Security Code", string.Empty),
-            extraFields.GetValueOrDefault("Cardholder Name", string.Empty));
+            extraFields.GetValueOrDefault("Cardholder Name", string.Empty),
+            extraFields.GetValueOrDefault("Credit Limit", string.Empty),
+            extraFields.GetValueOrDefault("Date Opened", string.Empty));
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
         _accountNumberBox.Text = dialog.CardNumber;
@@ -1026,6 +1059,8 @@ public class AccountEditForm : Form
         UpsertExtraField("Expiration Month", dialog.ExpirationMonth);
         UpsertExtraField("Expiration Year", dialog.ExpirationYear);
         UpsertExtraField("Security Code", dialog.SecurityCode);
+        UpsertExtraField("Credit Limit", dialog.CreditLimit);
+        UpsertExtraField("Date Opened", dialog.DateOpened);
     }
 
     /// <summary>Read-only parse of the Extra info box, for pre-filling the Card Details popup - not used for the actual Save (see SaveButton_Click, which parses it fresh with its own comparer).</summary>

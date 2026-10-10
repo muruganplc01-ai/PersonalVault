@@ -20,6 +20,12 @@ public class CreditCardDetailsForm : Form
     private readonly ComboBox _yearBox = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly TextBox _securityCodeBox = new() { Dock = DockStyle.Fill, MaxLength = 4 };
     private readonly TextBox _cardholderNameBox = new() { Dock = DockStyle.Fill };
+    private readonly NumericUpDown _creditLimitBox = new()
+    {
+        Dock = DockStyle.Fill, DecimalPlaces = 2, Minimum = 0, Maximum = 100_000_000, ThousandsSeparator = true
+    };
+    private readonly CheckBox _hasDateOpenedBox = new() { Text = "Known", AutoSize = true, Anchor = AnchorStyles.Left };
+    private readonly DateTimePicker _dateOpenedPicker = new() { Dock = DockStyle.Fill, Format = DateTimePickerFormat.Short, Enabled = false };
 
     // Guards CardNumberBox_TextChanged against re-entering itself when it rewrites
     // _cardNumberBox.Text below to insert/remove spacing.
@@ -32,11 +38,17 @@ public class CreditCardDetailsForm : Form
     public string SecurityCode => _securityCodeBox.Text.Trim();
     public string CardholderName => _cardholderNameBox.Text.Trim();
 
-    public CreditCardDetailsForm(string cardNumber, string expirationMonth, string expirationYear, string securityCode, string cardholderName)
+    /// <summary>Formatted with 2 decimal places (e.g. "5000.00"), or "" if left at 0 (treated as "not entered," same as every other field here).</summary>
+    public string CreditLimit => _creditLimitBox.Value == 0 ? string.Empty : _creditLimitBox.Value.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>ISO "yyyy-MM-dd", or "" if the "Known" checkbox is unchecked - same optional-date pattern as AccountEditForm's "Has a due date".</summary>
+    public string DateOpened => _hasDateOpenedBox.Checked ? _dateOpenedPicker.Value.ToString("yyyy-MM-dd") : string.Empty;
+
+    public CreditCardDetailsForm(string cardNumber, string expirationMonth, string expirationYear, string securityCode, string cardholderName, string creditLimit = "", string dateOpened = "")
     {
         Text = "Card Details";
         Width = 420;
-        Height = 330;
+        Height = 400;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MaximizeBox = false;
@@ -71,6 +83,14 @@ public class CreditCardDetailsForm : Form
 
         AddRow(layout, ref row, "Security Code:", _securityCodeBox);
         AddRow(layout, ref row, "Cardholder Name:", _cardholderNameBox);
+        AddRow(layout, ref row, "Credit Limit:", _creditLimitBox);
+
+        var dateOpenedPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoSize = true };
+        dateOpenedPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        dateOpenedPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        dateOpenedPanel.Controls.Add(_hasDateOpenedBox, 0, 0);
+        dateOpenedPanel.Controls.Add(_dateOpenedPicker, 1, 0);
+        AddRow(layout, ref row, "Date Opened:", dateOpenedPanel);
 
         var buttonPanel = new FlowLayoutPanel
         {
@@ -93,6 +113,7 @@ public class CreditCardDetailsForm : Form
 
         _cardNumberBox.TextChanged += CardNumberBox_TextChanged;
         _securityCodeBox.TextChanged += (_, _) => KeepDigitsOnly(_securityCodeBox);
+        _hasDateOpenedBox.CheckedChanged += (_, _) => _dateOpenedPicker.Enabled = _hasDateOpenedBox.Checked;
 
         _cardNumberBox.Text = cardNumber;
         if (!string.IsNullOrEmpty(expirationMonth))
@@ -101,6 +122,16 @@ public class CreditCardDetailsForm : Form
             _yearBox.SelectedItem = _yearBox.Items.Cast<string>().FirstOrDefault(y => y == expirationYear);
         _securityCodeBox.Text = securityCode;
         _cardholderNameBox.Text = cardholderName;
+
+        if (decimal.TryParse(creditLimit, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var limit))
+            _creditLimitBox.Value = Math.Min(_creditLimitBox.Maximum, Math.Max(_creditLimitBox.Minimum, limit));
+
+        if (DateTime.TryParse(dateOpened, out var opened))
+        {
+            _hasDateOpenedBox.Checked = true;
+            _dateOpenedPicker.Enabled = true;
+            _dateOpenedPicker.Value = opened;
+        }
     }
 
     private static void AddRow(TableLayoutPanel layout, ref int row, string label, Control control)
