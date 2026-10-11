@@ -242,16 +242,30 @@ docs/share/
       <p><code>TrayApplicationContext.SaveVault()</code> → <code>VaultStorage.SaveLocal</code>:
       serialize to JSON → <code>VaultCrypto.Encrypt</code> (a <b>fresh random salt and
       nonce every single save</b>, never reused) → write to a <code>.tmp</code> file →
-      <code>File.Replace</code> into place, so a crash mid-write can never corrupt the
-      real file.</p></div>
+      <code>AtomicFile.ReplaceInto</code> swaps it into place, so a crash mid-write can
+      never corrupt the real file. That swap retries a few times with a short backoff
+      if it hits a transient external lock (antivirus/indexer momentarily scanning the
+      file is the usual cause) instead of crashing on the first collision -
+      <code>PaymentsStorage.SaveLocal</code> and <code>AppSettings.Save</code> share the
+      same helper.</p></div>
     <div class="step"><div class="step-badge">4</div>
       <h4>Sync to Drive (fire-and-forget)</h4>
       <p><code>UploadToDriveAsync</code> → <code>GoogleDriveSync.UploadOrUpdateAsync</code>
-      uploads the already-encrypted bytes as-is — Drive never receives plaintext at any
-      point. <code>PruneOldRevisionsAsync</code> then pins the new revision and prunes
-      anything older than a rolling 7 days, using Drive's own revision history as a
-      backup — time-based rather than count-based, so a burst of saves in one day can't
-      crowd out an older revision from earlier in the week.</p></div>
+      reads the local file into memory up front (rather than holding a <code>FileStream</code>
+      open for the whole upload - that used to be able to collide with a save landing
+      moments later) and uploads the already-encrypted bytes as-is — Drive never
+      receives plaintext at any point. New files land in a <code>PersonalVaultData</code>
+      Drive folder (found-or-created by name, same pattern used for the other folders
+      below) instead of loose in Drive's root.</p>
+      <p>Just before an existing file is overwritten, <code>BackupBeforeOverwriteAsync</code>
+      copies it to a dated file in a separate <code>Backup</code> folder - throttled by
+      <code>AppSettings.BackupOnEverySave</code>/<code>BackupThrottleMinutes</code>
+      (default: at most once an hour, configurable from Profile) rather than on every
+      single save. <code>PruneOldDatedBackupsAsync</code> and
+      <code>PruneOldRevisionsAsync</code> (Drive's own internal revision history) both
+      prune anything older than a rolling 7 days - time-based rather than count-based,
+      so a burst of saves in one day can't crowd out an older version from earlier in
+      the week.</p></div>
   </div>
 
   <h2 class="section">6. One-time Share Account: the complete request path</h2>

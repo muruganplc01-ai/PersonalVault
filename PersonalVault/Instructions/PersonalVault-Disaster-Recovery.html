@@ -152,14 +152,17 @@
     <h2>The one thing that makes this possible</h2>
     <p style="margin:0;">
       <b>Google Drive sync is your backup.</b> Every save uploads the encrypted
-      <code>vault.pvlt</code> to your own Drive — and just before that upload
-      overwrites the existing file, it's copied first to a plain, dated file right next
-      to it (e.g. <code>PersonalVaultData-backup-2026-10-07-171053.pvlt</code>), so an
-      older version is just another file in your normal Drive listing — no "Manage
-      versions" menu to go hunting through. Both that and Drive's own internal revision
-      history cover a rolling 7 days (time-based, not a fixed count - several saves in
-      one day won't crowd out a version from earlier in the week). If Drive sync was
-      never turned on for this vault,
+      <code>vault.pvlt</code> to a <code>PersonalVaultData</code> folder in your own
+      Drive — and (by default, before that upload overwrites the existing file) it's
+      copied first to a plain, dated file in a separate <code>Backup</code> folder
+      (e.g. <code>PersonalVaultData-backup-2026-10-07-171053.pvlt</code>), so an older
+      version is just another file you can browse to, no "Manage versions" menu to go
+      hunting through. Both that and Drive's own internal revision history are pruned
+      after a rolling 7 days (time-based, not a fixed count - several saves in one day
+      won't crowd out a version from earlier in the week). Profile →
+      <b>Back up on every save</b> controls how often a new dated copy is made (default:
+      at most once an hour) - turn it on if you want one on every single save instead.
+      If Drive sync was never turned on for this vault,
       there is nothing to recover — the vault only ever existed on the one machine that
       held it, and losing that machine means losing the vault, by design (there is no
       other backend, no password reset, no company that holds a copy).
@@ -279,8 +282,10 @@
       permanently, both signed into the same account, both using the same master secret —
       that's exactly what this guide sets up. The one thing to know: there's no real-time
       merge between them. If you edit on both at close to the same time and both save,
-      whichever save reaches Drive last wins — Drive's 5-revision history is your safety
-      net if that ever clobbers something, but it isn't automatic conflict resolution.
+      whichever save reaches Drive last wins — Drive's own revision history (kept for a
+      rolling 7 days) and the dated copies in the <code>Backup</code> folder are your
+      safety net if that ever clobbers something, but neither is automatic conflict
+      resolution.
       In practice, just treat "the one you have open right now" as the active copy.
     </p>
   </div>
@@ -292,8 +297,10 @@
     <div class="qa">
       <div class="q"><span class="mark">?</span> I don't remember which Google account I used</div>
       <div class="a">Check <a href="https://drive.google.com" style="color:inherit">drive.google.com</a>
-      on each Google account you might have used and look for a file named
-      <code>PersonalVaultData.pvlt</code> — that's the one.</div>
+      on each Google account you might have used and look for a <code>PersonalVaultData</code>
+      folder containing <code>PersonalVaultData.pvlt</code> — that's the one. See
+      <code>PersonalVault-Drive-Setup-Guide.html</code> for what the other folders
+      (<code>Backup</code>, <code>Shares</code>, <code>Sharing</code>) are, if you see those too.</div>
     </div>
 
     <div class="qa">

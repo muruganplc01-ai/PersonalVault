@@ -436,8 +436,34 @@
         <span class="icon">✓</span>
         <span>Done when the tray shows <i>"Signed in to Google Drive."</i> Add an account entry
         and check <a href="https://drive.google.com" style="color:inherit">drive.google.com</a>
-        for a new file named <code>PersonalVaultData.pvlt</code> — that's your encrypted vault,
-        visible to no one but you.</span>
+        for a new <code>PersonalVaultData</code> folder, containing <code>PersonalVaultData.pvlt</code>
+        — that's your encrypted vault, visible to no one but you.</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">8</div>
+      <span class="crumb">drive.google.com</span>
+      <h3>The folders you'll see appear</h3>
+      <p>
+        Personal Vault organizes everything it creates into a few folders, instead of
+        scattering files loose in your Drive root:
+      </p>
+      <ul>
+        <li><code>PersonalVaultData</code> — the live files: your vault, payment
+        history, and settings. This is the one that matters for disaster recovery.</li>
+        <li><code>Backup</code> — dated backup copies, made automatically before each
+        sync overwrites the live file, pruned after 7 days. See Profile →
+        <b>Back up on every save</b> to control how often these are made.</li>
+        <li><code>Shares</code> — active one-time "Share Account" links, if you've used
+        that feature. Self-cleans as links are viewed or expire.</li>
+        <li><code>Sharing</code> — only appears if you've used the app to prepare an
+        onboarding package for a friend; not something normal use creates on its own.</li>
+      </ul>
+      <div class="callout note">
+        <span class="icon">📂</span>
+        <span>All four are created automatically the first time they're needed — nothing
+        to set up by hand.</span>
       </div>
     </div>
 

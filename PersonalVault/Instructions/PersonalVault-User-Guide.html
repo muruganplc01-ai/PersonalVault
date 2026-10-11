@@ -281,15 +281,71 @@
     <div class="step">
       <div class="step-badge">8</div>
       <span class="crumb">Profile</span>
-      <h3>Name, browser, master password, data folder</h3>
+      <h3>Name, browser, master password, data folder, field sets, backups</h3>
       <p>
         Profile is also where <b>Change Master Password...</b>, <b>Two-Factor
-        Authentication...</b>, and <b>Change Data Folder...</b> live — see the linked
-        guides below for those in full detail.
+        Authentication...</b>, <b>Change Data Folder...</b>, <b>Field Sets...</b> (next
+        section), and backup frequency all live — see the linked guides below for the
+        security-related ones in full detail. Every button sits beside the feature it
+        belongs to rather than stacked underneath, so the whole screen stays scannable
+        even with this many settings on it.
       </p>
       <div class="shot">
-        <img src="screens/13-profile.png" alt="Profile dialog">
+        <img src="screens/15-profile.png" alt="Profile dialog">
         <div class="cap">Your Profile</div>
+      </div>
+      <div class="callout note">
+        <span class="icon">💾</span>
+        <span><b>Backups:</b> a dated backup copy is made automatically before each
+        sync - "Back up on every save" (off by default) makes one on every single save;
+        left off, a new one is skipped unless the configured number of minutes
+        (default 60) has passed since the last one.</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">9</div>
+      <span class="crumb">Owner, Sub Category, Field Sets</span>
+      <h3>Organizing accounts your own way</h3>
+      <p>
+        The Accounts list has a <b>Sub Category</b> column right next to Category - free
+        text per entry (e.g. "Work" / "Personal" under an Email category), and it auto-
+        selects the first row on load so Edit/Delete/Copy work immediately. <b>Owner</b>
+        is a dropdown too, populated from everyone already used across your accounts,
+        with a <b>+ New...</b> option same as Category.
+      </p>
+      <div class="shot">
+        <img src="screens/14-main-list.png" alt="Main Accounts list showing the Sub Category column">
+        <div class="cap">Accounts list — Category, Sub Category, Owner dropdown in use</div>
+      </div>
+      <p>
+        Which fields actually appear in Account Details - and in what order - is
+        configurable per category from Profile → <b>Field Sets...</b>. Hiding a field
+        never deletes its value; it just stops showing until you bring it back. A few
+        categories ship with fields tailored to them out of the box: Azure gets an
+        <b>IP Address</b> field, Mortgage/CarLoan get a <b>Maturity Date</b>, and
+        CreditCard's <b>Card Details</b> popup includes <b>Credit Limit</b> and
+        <b>Date Opened</b>.
+      </p>
+      <div class="shot-row">
+        <div class="shot">
+          <img src="screens/16-account-edit-azure.png" alt="Account Details for an Azure entry showing the IP Address field">
+          <div class="cap">Azure — IP Address, in its configured position</div>
+        </div>
+        <div class="shot">
+          <img src="screens/19-field-sets.png" alt="Field Sets management screen">
+          <div class="cap">Profile → Field Sets...</div>
+        </div>
+      </div>
+      <div class="shot-row">
+        <div class="shot">
+          <img src="screens/17-account-edit-mortgage.png" alt="Account Details for a Mortgage entry showing Account # and Maturity Date">
+          <div class="cap">Mortgage — Account #, Current Balance, Asset Value, Maturity Date</div>
+        </div>
+        <div class="shot">
+          <img src="screens/18-card-details.png" alt="Card Details popup showing Credit Limit and Date Opened">
+          <div class="cap">Card Details — Credit Limit, Date Opened</div>
+        </div>
       </div>
     </div>
 

@@ -285,9 +285,11 @@
     <div class="step"><div class="step-badge">3</div>
       <h4>Encrypt, then upload as a PRIVATE file</h4>
       <p>AES-256-GCM encrypts the payload with that key. The ciphertext is uploaded to
-      your own Google Drive as a brand-new file with <b>no sharing permission granted
-      at all</b> — not even "anyone with the link." Nobody can read it directly, not
-      even you without your own Drive sign-in.</p></div>
+      your own Google Drive — into a dedicated <code>Shares</code> folder alongside
+      <code>PersonalVaultData</code> and <code>Backup</code> (see the Drive Setup Guide)
+      — as a brand-new file with <b>no sharing permission granted at all</b> — not even
+      "anyone with the link." Nobody can read it directly, not even you without your
+      own Drive sign-in.</p></div>
     <div class="step"><div class="step-badge">4</div>
       <h4>Build the link</h4>
       <p><code>https://&lt;you&gt;.github.io/PersonalVault/share/#id=&lt;fileId&gt;&amp;key=&lt;theKey&gt;&amp;exp=&lt;time&gt;</code>
