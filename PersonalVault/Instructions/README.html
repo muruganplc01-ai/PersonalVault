@@ -1,0 +1,442 @@
+<title>Personal Vault — Start Here</title>
+<style>
+  :root {
+    --paper: #f7f4ee;
+    --paper-raised: #ffffff;
+    --ink: #1e2430;
+    --ink-soft: #5b6472;
+    --rule: #ddd6c7;
+    --brass: #93672c;
+    --brass-strong: #7a5322;
+    --brass-wash: #f0e4cd;
+    --teal: #2f6b4f;
+    --teal-wash: #e3efe7;
+    --rust: #a34a24;
+    --rust-wash: #f6e6dc;
+    --mono-chip-bg: #eee9dc;
+    --mono-chip-ink: #4a4335;
+    --shadow: 0 1px 2px rgba(30,36,48,0.06), 0 8px 24px rgba(30,36,48,0.06);
+  }
+
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --paper: #14171d;
+      --paper-raised: #1c212a;
+      --ink: #ece8de;
+      --ink-soft: #a1a7b3;
+      --rule: #333a46;
+      --brass: #cf9f54;
+      --brass-strong: #e2b46e;
+      --brass-wash: #2c2418;
+      --teal: #7cc9a3;
+      --teal-wash: #16261e;
+      --rust: #e2895d;
+      --rust-wash: #2c1c14;
+      --mono-chip-bg: #262b34;
+      --mono-chip-ink: #cfd3da;
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #14171d;
+    --paper-raised: #1c212a;
+    --ink: #ece8de;
+    --ink-soft: #a1a7b3;
+    --rule: #333a46;
+    --brass: #cf9f54;
+    --brass-strong: #e2b46e;
+    --brass-wash: #2c2418;
+    --teal: #7cc9a3;
+    --teal-wash: #16261e;
+    --rust: #e2895d;
+    --rust-wash: #2c1c14;
+    --mono-chip-bg: #262b34;
+    --mono-chip-ink: #cfd3da;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    padding-inline: 20px;
+    padding-block: 48px 96px;
+  }
+
+  h1, h2, h3 { font-family: "Fraunces", Georgia, serif; text-wrap: balance; margin: 0; }
+
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--brass-strong);
+    background: var(--brass-wash);
+    border-radius: 999px;
+    padding: 5px 12px 5px 10px;
+    margin-bottom: 22px;
+  }
+  .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--brass); }
+
+  header h1 {
+    font-size: clamp(30px, 5vw, 42px);
+    font-weight: 600;
+    line-height: 1.08;
+    letter-spacing: -0.01em;
+  }
+
+  header .sub {
+    margin-top: 14px;
+    font-size: 17px;
+    color: var(--ink-soft);
+    max-width: 56ch;
+  }
+
+  .panel {
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    padding: 22px 24px;
+    margin-top: 28px;
+  }
+
+  .panel h2 {
+    font-size: 15px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--brass-strong);
+    margin-bottom: 10px;
+  }
+
+  .steps {
+    margin-top: 40px;
+    position: relative;
+  }
+
+  .steps::before {
+    content: "";
+    position: absolute;
+    left: 21px;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    background: var(--rule);
+  }
+
+  .step {
+    position: relative;
+    padding-left: 60px;
+    margin-bottom: 34px;
+  }
+  .step:last-child { margin-bottom: 0; }
+
+  .step-badge {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--paper-raised);
+    border: 2px solid var(--brass);
+    color: var(--brass-strong);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-weight: 600;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow);
+  }
+
+  .step.optional .step-badge { border-color: var(--rule); color: var(--ink-soft); }
+
+  .step h3 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .crumb {
+    display: inline-flex;
+    align-items: center;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12.5px;
+    color: var(--mono-chip-ink);
+    background: var(--mono-chip-bg);
+    border-radius: 6px;
+    padding: 4px 9px;
+    margin-bottom: 12px;
+  }
+
+  .optional-tag {
+    display: inline-flex;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    background: var(--mono-chip-bg);
+    border-radius: 6px;
+    padding: 3px 8px;
+    margin-left: 8px;
+    vertical-align: 2px;
+  }
+
+  .step p { margin: 10px 0 0; }
+  .step ul, .step ol { margin: 10px 0 0; padding-left: 22px; }
+  .step li { margin-bottom: 6px; }
+
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.92em;
+    background: var(--mono-chip-bg);
+    color: var(--mono-chip-ink);
+    padding: 0.1em 0.4em;
+    border-radius: 4px;
+  }
+
+  .callout {
+    margin-top: 14px;
+    border-radius: 10px;
+    padding: 13px 16px;
+    font-size: 14.5px;
+    display: flex;
+    gap: 10px;
+  }
+  .callout .icon { flex: none; font-size: 15px; line-height: 1.5; }
+  .callout.gotcha { background: var(--rust-wash); color: var(--rust); }
+  .callout.gotcha strong { color: var(--rust); }
+  .callout.note { background: var(--mono-chip-bg); color: var(--ink-soft); }
+  .callout.done { background: var(--teal-wash); color: var(--teal); }
+  .callout p, .callout span { margin: 0; }
+  .callout b { color: inherit; }
+
+  .links { margin-top: 40px; }
+  .links h2 { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
+  .links .sub { color: var(--ink-soft); margin-bottom: 20px; font-size: 14.5px; }
+
+  .linkcard {
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .linkcard .step-of {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--brass-strong);
+    background: var(--brass-wash);
+    border-radius: 999px;
+    padding: 2px 8px;
+    flex: none;
+  }
+  .linkcard .t { font-weight: 600; font-size: 15px; }
+  .linkcard .d { margin-top: 2px; font-size: 14.5px; color: var(--ink-soft); flex-basis: 100%; }
+  .linkcard .f { margin-top: 4px; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; color: var(--brass-strong); flex-basis: 100%; }
+
+  footer {
+    margin-top: 48px;
+    padding-top: 22px;
+    border-top: 1px solid var(--rule);
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow"><span class="dot"></span>Start here — everything else in this folder, in order</div>
+    <h1>Personal Vault — road map</h1>
+    <p class="sub">
+      This folder has everything you need: the app, and every guide you might want.
+      Nothing here is time-sensitive or one-shot — read this once, then come back to
+      any step whenever you actually need it. Steps 1–3 are all you need to start
+      using the app today. Everything after that is optional.
+    </p>
+  </header>
+
+  <div class="steps">
+
+    <div class="step">
+      <div class="step-badge">1</div>
+      <span class="crumb">This Drive folder</span>
+      <h3>Download everything to your PC</h3>
+      <p>
+        Select all the files in this folder → <b>Download</b> (Drive zips them for you
+        automatically) → unzip anywhere on your PC. No installer, no admin rights
+        needed — <code>PersonalVault.exe</code> runs straight from wherever you put it.
+      </p>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">2</div>
+      <span class="crumb">Double-click PersonalVault.exe</span>
+      <h3>Create your own vault</h3>
+      <p>
+        Choose your own master secret (12+ characters, with uppercase, lowercase, and
+        a symbol) and add your first account. This is yours alone — nobody, including
+        whoever shared this folder with you, ever sees it or can reset it for you.
+      </p>
+      <div class="callout done">
+        <span class="icon">✓</span>
+        <span>Your data lives in a new <code>PersonalVault</code> folder created
+        automatically right next to your copy of the .exe — fully portable, and
+        completely separate from whoever shared this folder with you.</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-badge">3</div>
+      <span class="crumb">Read this next</span>
+      <h3>Learn the everyday screens</h3>
+      <p>
+        <code>PersonalVault-User-Guide.html</code> covers adding/editing accounts,
+        categories and Sub Category, the Owner dropdown, Field Sets (customizing which
+        fields show per category), and the Profile screen's settings. This is the one
+        doc worth reading end to end before anything else.
+      </p>
+    </div>
+
+    <div class="step optional">
+      <div class="step-badge">4</div>
+      <span class="crumb">Only if you want it <span class="optional-tag">optional</span></span>
+      <h3>Set up your own Google Drive backup</h3>
+      <p>
+        Follow <code>PersonalVault-Drive-Setup-Guide.html</code> start to finish — your
+        own Google Cloud project, your own <code>credentials.json</code>, your own
+        Drive files. About 10 minutes, entirely self-service. Skip this if you're happy
+        keeping everything local; the app works fully offline either way.
+      </p>
+    </div>
+
+    <div class="step optional">
+      <div class="step-badge">5</div>
+      <span class="crumb">Only if you want it <span class="optional-tag">optional</span></span>
+      <h3>Set up one-time Share links</h3>
+      <p>
+        This is the <b>Share...</b> button that hands someone a real one-time link to a
+        single password. Follow <code>PersonalVault-Share-Setup-Guide.html</code> — it
+        walks through creating your own GitHub Pages site and your own Google Apps
+        Script deployment, about 15 minutes.
+      </p>
+      <p>
+        <code>ShareScript-index.html</code> and <code>ShareScript-Code.gs</code> are
+        the exact two code blocks that guide has you paste in — having them as real
+        files means copy-pasting from a working file instead of retyping out of the
+        guide's code boxes.
+      </p>
+    </div>
+
+    <div class="step optional">
+      <div class="step-badge">6</div>
+      <span class="crumb">If you're curious <span class="optional-tag">optional</span></span>
+      <h3>See exactly how it all works</h3>
+      <p>
+        <code>PersonalVault-Security-Deep-Dive.html</code> — the encryption scheme,
+        the full one-time-share-link flow, and exactly why a public GitHub Pages page
+        is safe. Not required reading, but everything in the app is explained there in
+        full technical detail if you ever want to check.
+      </p>
+    </div>
+
+  </div>
+
+  <div class="links">
+    <h2>Everything in this folder</h2>
+    <div class="sub">Same list as above, for quick reference once you've read it once.</div>
+
+    <div class="linkcard">
+      <span class="step-of">step 2</span>
+      <div class="t">The app itself</div>
+      <div class="f">PersonalVault.exe</div>
+    </div>
+
+    <div class="linkcard">
+      <span class="step-of">step 3</span>
+      <div class="t">Day-to-day user guide</div>
+      <div class="f">PersonalVault-User-Guide.html</div>
+    </div>
+
+    <div class="linkcard">
+      <span class="step-of">step 4</span>
+      <div class="t">Google Drive backup setup</div>
+      <div class="f">PersonalVault-Drive-Setup-Guide.html</div>
+    </div>
+
+    <div class="linkcard">
+      <span class="step-of">step 5</span>
+      <div class="t">One-time Share link setup</div>
+      <div class="f">PersonalVault-Share-Setup-Guide.html</div>
+    </div>
+
+    <div class="linkcard">
+      <span class="step-of">step 5</span>
+      <div class="t">Share link viewer page source</div>
+      <div class="d">Paste this into your own GitHub repo at <code>docs/share/index.html</code> — see the Share Setup Guide, step 2.</div>
+      <div class="f">ShareScript-index.html</div>
+    </div>
+
+    <div class="linkcard">
+      <span class="step-of">step 5</span>
+      <div class="t">Share link Apps Script source</div>
+      <div class="d">Paste this over the placeholder <code>Code.gs</code> in your Apps Script project — see the Share Setup Guide, step 7.</div>
+      <div class="f">ShareScript-Code.gs</div>
+    </div>
+
+    <div class="linkcard">
+      <span class="step-of">step 6</span>
+      <div class="t">Security deep dive</div>
+      <div class="f">PersonalVault-Security-Deep-Dive.html</div>
+    </div>
+
+    <div class="linkcard">
+      <span class="step-of">reference</span>
+      <div class="t">The big picture, if a friend sent you this folder</div>
+      <div class="d">Ties all of the above together, plus the optional two-factor authentication setup (Profile → Two-Factor Authentication...).</div>
+      <div class="f">PersonalVault-Sharing-With-a-Friend.html</div>
+    </div>
+  </div>
+
+  <div class="callout note" style="margin-top:32px;">
+    <span class="icon">💡</span>
+    <span>Nothing in this folder is sensitive by itself — no password, no master
+    secret, no one's actual account data. It's safe to keep, re-download, or hand to
+    someone else exactly as-is.</span>
+  </div>
+
+  <footer>
+    <span>Personal Vault — start here</span>
+    <span>Steps 1–3 to get going · 4–6 whenever you want them</span>
+  </footer>
+
+</div>
