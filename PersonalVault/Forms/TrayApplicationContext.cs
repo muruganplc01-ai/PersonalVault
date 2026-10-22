@@ -40,6 +40,26 @@ public class TrayApplicationContext : ApplicationContext
     /// </summary>
     private readonly SemaphoreSlim _settingsUploadLock = new(1, 1);
 
+    /// <summary>
+    /// Serializes UploadToDriveAsync - the real fix for a confirmed data-loss mechanism.
+    /// SaveVault fires this off un-awaited on every save (_ = UploadToDriveAsync()), so
+    /// saving several accounts in quick succession used to start several concurrent
+    /// uploads to the same Drive file with no ordering guarantee at all: whichever HTTP
+    /// request happened to complete LAST on Google's side won, even if it had started
+    /// from an OLDER snapshot of the local file than a different upload that had already
+    /// finished. That could leave Drive holding fewer accounts than were actually saved
+    /// locally, with a modifiedTime that still looked "newer" than the local file's own
+    /// timestamp (Drive's time is always set when the upload *finishes*, strictly after
+    /// the local write it was uploading) - so the next SyncNowAsync comparison would see
+    /// Drive as newer and overwrite the correct local vault with that stale copy. With
+    /// this lock, uploads for a given save always complete in the order they were
+    /// started, so the last one to run is always working from the most recent local data.
+    /// </summary>
+    private readonly SemaphoreSlim _vaultUploadLock = new(1, 1);
+
+    /// <summary>Same reasoning as _vaultUploadLock, for UploadPaymentsToDriveAsync.</summary>
+    private readonly SemaphoreSlim _paymentsUploadLock = new(1, 1);
+
     private readonly List<SharedLink> _shares = SharesStorage.Load();
     private ShareExpiryService? _shareExpiry;
     private System.Windows.Forms.Timer? _idleTimer;
@@ -1021,6 +1041,10 @@ public class TrayApplicationContext : ApplicationContext
         string previousTrayText = _trayIcon.Text;
         _trayIcon.Text = "Personal Vault (Syncing to Drive...)";
 
+        // See _vaultUploadLock's doc comment - without this, saving several accounts in
+        // quick succession could start concurrent uploads that finish out of order, with
+        // an older one winning on Drive despite being started from stale local content.
+        await _vaultUploadLock.WaitAsync();
         try
         {
             DebugLog.Write("UploadToDriveAsync: authenticated - starting upload sequence.");
@@ -1050,6 +1074,7 @@ public class TrayApplicationContext : ApplicationContext
         }
         finally
         {
+            _vaultUploadLock.Release();
             _trayIcon.Text = previousTrayText;
         }
     }
@@ -1076,6 +1101,7 @@ public class TrayApplicationContext : ApplicationContext
         DebugLog.Write($"UploadPaymentsToDriveAsync: called. _drive.IsAuthenticated={_drive.IsAuthenticated}.");
         if (!_drive.IsAuthenticated) return;
 
+        await _paymentsUploadLock.WaitAsync();
         try
         {
             _paymentsDriveFileId ??= _settings.PaymentsDriveFileId
@@ -1094,6 +1120,10 @@ public class TrayApplicationContext : ApplicationContext
         {
             DebugLog.WriteException("UploadPaymentsToDriveAsync", ex);
             Notify("Personal Vault", "Could not sync payment history to Google Drive: " + ex.Message, ToolTipIcon.Warning);
+        }
+        finally
+        {
+            _paymentsUploadLock.Release();
         }
     }
 
