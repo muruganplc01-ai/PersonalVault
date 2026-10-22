@@ -30,6 +30,16 @@ public class TrayApplicationContext : ApplicationContext
     private PaymentsData? _payments;
     private string? _paymentsDriveFileId;
     private string? _settingsDriveFileId;
+
+    /// <summary>
+    /// Serializes UploadSettingsToDriveAsync (see its doc comment) - without this, several
+    /// settings changing in one go (e.g. Profile's Save button, which fires off GitHub
+    /// username/debug logging/backup settings as separate un-awaited calls) can each race
+    /// to resolve _settingsDriveFileId before any of them finish, see nothing cached yet,
+    /// and each create their own duplicate PersonalVaultSettings.json on Drive.
+    /// </summary>
+    private readonly SemaphoreSlim _settingsUploadLock = new(1, 1);
+
     private readonly List<SharedLink> _shares = SharesStorage.Load();
     private ShareExpiryService? _shareExpiry;
     private System.Windows.Forms.Timer? _idleTimer;
@@ -583,20 +593,28 @@ public class TrayApplicationContext : ApplicationContext
     /// so local and Drive-side history cover the same span. Best-effort: a failure here
     /// must never block the restore/sync it's protecting.
     /// </summary>
-    private static void BackupLocalVaultBeforeOverwrite()
+    /// <summary>
+    /// Where the next BackupLocalVaultBeforeOverwrite call will write to - computed ahead
+    /// of time (rather than inside that method) so a confirmation dialog can show the
+    /// user the exact path BEFORE anything happens, and then the actual backup uses that
+    /// same path rather than recomputing its own timestamp a few seconds later.
+    /// </summary>
+    private static string ComputeNextLocalBackupPath() =>
+        Path.Combine(AppPaths.RootFolder, "backup", $"vault-{DateTime.Now:yyyy-MM-dd-HHmmss}.pvlt");
+
+    private static void BackupLocalVaultBeforeOverwrite() => BackupLocalVaultBeforeOverwrite(ComputeNextLocalBackupPath());
+
+    private static void BackupLocalVaultBeforeOverwrite(string backupPath)
     {
         try
         {
             if (!File.Exists(AppPaths.VaultLocalPath)) return;
 
-            string backupFolder = Path.Combine(AppPaths.RootFolder, "backup");
-            Directory.CreateDirectory(backupFolder);
-
-            string stamp = DateTime.Now.ToString("yyyy-MM-dd-HHmmss");
-            string backupPath = Path.Combine(backupFolder, $"vault-{stamp}.pvlt");
+            Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
             File.Copy(AppPaths.VaultLocalPath, backupPath, overwrite: true);
             DebugLog.Write($"BackupLocalVaultBeforeOverwrite: backed up current local vault to '{backupPath}'.");
 
+            string backupFolder = Path.GetDirectoryName(backupPath)!;
             var cutoff = DateTime.Now.AddDays(-7);
             foreach (var old in Directory.GetFiles(backupFolder, "vault-*.pvlt"))
             {
@@ -925,6 +943,20 @@ public class TrayApplicationContext : ApplicationContext
         DebugLog.Write($"SaveVault: called. _vault null? {_vault == null}. _secret null? {_secret == null}.");
         if (_vault == null || _secret == null) return;
 
+        // Dated LOCAL backups, on the same "Back up on every save" / throttle cadence as
+        // the Drive-side dated backups (shares the same LastBackupUtc clock - whichever of
+        // the two save paths runs first for a given save "wins" and the other sees it's
+        // already covered). Previously the local backup/ folder only ever got written to
+        // right before a Drive pull overwrote local content - meaning if Drive sync was
+        // ever down for an extended period, nothing local got backed up either, even
+        // though "Back up on every save" implied it would. See DriveOverwriteWarningForm
+        // for the related fix to the pull side of this.
+        if (ShouldCreateBackupNow())
+        {
+            BackupLocalVaultBeforeOverwrite();
+            MarkBackupCreated();
+        }
+
         VaultStorage.SaveLocal(_vault, _secret);
         DebugLog.Write($"SaveVault: local file written to '{AppPaths.VaultLocalPath}'. Kicking off UploadToDriveAsync (fire-and-forget)...");
         _ = UploadToDriveAsync();
@@ -1236,12 +1268,19 @@ public class TrayApplicationContext : ApplicationContext
         _ = UploadSettingsToDriveAsync();
     }
 
-    /// <summary>Same shape as UploadPaymentsToDriveAsync, for the local-preferences file.</summary>
+    /// <summary>
+    /// Same shape as UploadPaymentsToDriveAsync, for the local-preferences file. Guarded by
+    /// _settingsUploadLock (see its doc comment) - callers commonly fire this off several
+    /// times in a row without awaiting (e.g. Profile's Save button), and without the lock
+    /// each concurrent call could resolve _settingsDriveFileId as "not set yet" and create
+    /// its own duplicate Drive file instead of waiting for the first call's result.
+    /// </summary>
     private async Task UploadSettingsToDriveAsync()
     {
         DebugLog.Write($"UploadSettingsToDriveAsync: called. _drive.IsAuthenticated={_drive.IsAuthenticated}.");
         if (!_drive.IsAuthenticated) return;
 
+        await _settingsUploadLock.WaitAsync();
         try
         {
             _settingsDriveFileId ??= _settings.SettingsDriveFileId
@@ -1263,6 +1302,10 @@ public class TrayApplicationContext : ApplicationContext
         {
             DebugLog.WriteException("UploadSettingsToDriveAsync", ex);
             Notify("Personal Vault", "Could not sync settings to Google Drive: " + ex.Message, ToolTipIcon.Warning);
+        }
+        finally
+        {
+            _settingsUploadLock.Release();
         }
     }
 
@@ -1395,14 +1438,29 @@ public class TrayApplicationContext : ApplicationContext
 
         if (remoteModified.HasValue && remoteModified.Value > localModified)
         {
-            DebugLog.Write("SyncNowAsync: remote is newer - pulling from Drive instead of pushing.");
+            DebugLog.Write("SyncNowAsync: remote is newer - asking for explicit confirmation before pulling from Drive (DriveOverwriteWarningForm).");
             var bytes = await _drive.DownloadAsync(_driveFileId);
             var data = VaultStorage.LoadFromBytes(bytes, _secret!);
+
+            string backupPath = ComputeNextLocalBackupPath();
+            string localSummary = $"This PC's current local vault: {_vault!.Accounts.Count} account(s), last saved {localModified.ToLocalTime():g}.";
+            string remoteSummary = $"Google Drive's copy: {data.Accounts.Count} account(s), last saved {remoteModified.Value.ToLocalTime():g}.";
+
+            using var warningForm = new DriveOverwriteWarningForm(backupPath, localSummary, remoteSummary);
+            var confirm = warningForm.ShowDialog();
+            if (confirm != DialogResult.Yes)
+            {
+                DebugLog.Write("SyncNowAsync: user declined to overwrite local with Drive's copy - leaving local vault untouched, not pushing either.");
+                Notify("Personal Vault", "Kept your local vault - Drive's copy was not applied. Use \"Sync Now\" when you're ready to decide.", ToolTipIcon.Info);
+                return;
+            }
+
+            DebugLog.Write("SyncNowAsync: user confirmed - pulling from Drive instead of pushing.");
+            BackupLocalVaultBeforeOverwrite(backupPath);
             _vault = data;
-            BackupLocalVaultBeforeOverwrite();
             File.WriteAllBytes(AppPaths.VaultLocalPath, bytes);
             _mainForm?.RefreshData(_vault);
-            if (!silent) MessageBox.Show("Pulled the newer copy from Google Drive.", "Personal Vault");
+            Notify("Personal Vault", "Replaced local vault with Google Drive's copy. Your previous local vault was backed up to: " + backupPath, ToolTipIcon.Info);
         }
         else
         {
