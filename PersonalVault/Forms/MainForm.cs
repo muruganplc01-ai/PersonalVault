@@ -41,6 +41,13 @@ public class MainForm : Form
     private readonly ComboBox _ownerFilter;
     private readonly Label _driveStatusLabel;
     private readonly Button _driveSignInButton;
+    private readonly Label _accountCountLabel;
+
+    // Which column the Accounts grid is currently sorted by (index into _listView.Columns)
+    // and direction - set by clicking a column header (see ListView_ColumnClick). Defaults
+    // to the Due Date column ascending, matching this grid's long-standing default order.
+    private int _sortColumn = DueDateColumnIndex;
+    private bool _sortAscending = true;
 
     // --- Dues tab ---
     private readonly ListView _duesListView;
@@ -62,6 +69,19 @@ public class MainForm : Form
 
     private const string AllCategoriesLabel = "All Categories";
     private const string AllOwnersLabel = "All Owners";
+
+    // Column indices for the Accounts grid (_listView) - kept as named constants since
+    // ListView_ColumnClick/SortAccounts need to know what each column means to sort it
+    // correctly (dates by actual DateTime, not by the formatted display string).
+    private const int CategoryColumnIndex = 0;
+    private const int SubCategoryColumnIndex = 1;
+    private const int NameColumnIndex = 2;
+    private const int InstitutionColumnIndex = 3;
+    private const int OwnerColumnIndex = 4;
+    private const int UsernameColumnIndex = 5;
+    private const int DueDateColumnIndex = 6;
+    private const int AutopayColumnIndex = 7;
+    private const int AddedColumnIndex = 8;
 
     // Grid coloring - header stands out from the white body, alternating rows make
     // long lists easier to scan, and the selected row uses its own color rather than
@@ -234,6 +254,9 @@ public class MainForm : Form
         searchRow.Controls.Add(ownerLabel);
         searchRow.Controls.Add(_ownerFilter);
 
+        _accountCountLabel = new Label { AutoSize = true, Padding = new Padding(24, 6, 0, 0), ForeColor = Color.DimGray };
+        searchRow.Controls.Add(_accountCountLabel);
+
         topPanel.Controls.Add(driveRow, 0, 0);
         topPanel.Controls.Add(vaultRow, 0, 1);
         topPanel.Controls.Add(searchRow, 0, 2);
@@ -259,7 +282,9 @@ public class MainForm : Form
         _listView.Columns.Add("Username", 140);
         _listView.Columns.Add("Due Date", 100);
         _listView.Columns.Add("Autopay", 70);
+        _listView.Columns.Add("Added", 100);
         _listView.DoubleClick += (_, _) => EditSelected();
+        _listView.ColumnClick += ListView_ColumnClick;
         _listView.DrawColumnHeader += ListView_DrawColumnHeader;
         _listView.DrawItem += (_, e) => e.DrawDefault = false; // rows are painted per-cell by DrawSubItem below
         _listView.DrawSubItem += ListView_DrawSubItem;
@@ -769,9 +794,11 @@ public class MainForm : Form
         if (!string.IsNullOrEmpty(ownerSelection) && ownerSelection != AllOwnersLabel)
             accounts = accounts.Where(a => string.Equals(a.Owner, ownerSelection, StringComparison.OrdinalIgnoreCase));
 
+        var filtered = accounts.ToList();
+
         _listView.BeginUpdate();
         _listView.Items.Clear();
-        foreach (var account in accounts.OrderBy(a => a.DueDate ?? DateTime.MaxValue))
+        foreach (var account in SortAccounts(filtered))
         {
             var item = new ListViewItem(account.Category);
             item.SubItems.Add(account.SubCategory);
@@ -781,10 +808,16 @@ public class MainForm : Form
             item.SubItems.Add(account.UserName);
             item.SubItems.Add(account.DueDate?.ToString("MMM d, yyyy") ?? "");
             item.SubItems.Add(account.IsAutomaticPayment ? "Yes" : "");
+            item.SubItems.Add(account.CreatedUtc.ToLocalTime().ToString("MMM d, yyyy"));
             item.Tag = account;
             _listView.Items.Add(item);
         }
         _listView.EndUpdate();
+        UpdateColumnSortHeaders();
+
+        _accountCountLabel.Text = filtered.Count == _vault.Accounts.Count
+            ? $"{filtered.Count} account(s)"
+            : $"Showing {filtered.Count} of {_vault.Accounts.Count} account(s)";
 
         // Auto-select the first row (if any) every time this list is rebuilt - on
         // initial load and after every filter/search/add/edit/delete refresh - so
@@ -796,6 +829,51 @@ public class MainForm : Form
             _listView.Items[0].Selected = true;
             _listView.Items[0].Focused = true;
             _listView.Items[0].EnsureVisible();
+        }
+    }
+
+    /// <summary>
+    /// Orders the Accounts grid by whichever column was last clicked (_sortColumn/
+    /// _sortAscending - see ListView_ColumnClick), sorting dates by their actual
+    /// DateTime value rather than the formatted display string so "Jan" doesn't sort
+    /// before "Feb" alphabetically. Defaults to Due Date ascending, this grid's
+    /// long-standing default order, until a header is clicked.
+    /// </summary>
+    private List<AccountEntry> SortAccounts(IEnumerable<AccountEntry> accounts)
+    {
+        IOrderedEnumerable<AccountEntry> Order<TKey>(Func<AccountEntry, TKey> key) =>
+            _sortAscending ? accounts.OrderBy(key) : accounts.OrderByDescending(key);
+
+        IOrderedEnumerable<AccountEntry> ordered = _sortColumn switch
+        {
+            CategoryColumnIndex => Order(a => a.Category),
+            SubCategoryColumnIndex => Order(a => a.SubCategory),
+            NameColumnIndex => Order(a => a.Name),
+            InstitutionColumnIndex => Order(a => a.Institution),
+            OwnerColumnIndex => Order(a => a.Owner),
+            UsernameColumnIndex => Order(a => a.UserName),
+            AutopayColumnIndex => Order(a => a.IsAutomaticPayment),
+            AddedColumnIndex => Order(a => a.CreatedUtc),
+            _ => Order(a => a.DueDate ?? DateTime.MaxValue),
+        };
+        return ordered.ToList();
+    }
+
+    private void ListView_ColumnClick(object? sender, ColumnClickEventArgs e)
+    {
+        if (_sortColumn == e.Column) _sortAscending = !_sortAscending;
+        else { _sortColumn = e.Column; _sortAscending = true; }
+        ApplyFilter();
+    }
+
+    /// <summary>Appends a small ▲/▼ to whichever column header is currently sorted, clearing it from the rest.</summary>
+    private void UpdateColumnSortHeaders()
+    {
+        for (int i = 0; i < _listView.Columns.Count; i++)
+        {
+            var header = _listView.Columns[i];
+            var baseText = header.Text.TrimEnd(' ', '▲', '▼');
+            header.Text = i == _sortColumn ? $"{baseText} {(_sortAscending ? '▲' : '▼')}" : baseText;
         }
     }
 
@@ -998,6 +1076,7 @@ public class MainForm : Form
         return Has(a.Name) || Has(a.Institution) || Has(a.Owner) || Has(a.UserName) ||
                Has(a.AccountNumber) || Has(a.Website) || Has(a.PhoneNumber) || Has(a.Notes) ||
                Has(a.Category) ||
+               Has(a.CreatedUtc.ToLocalTime().ToString("MMM d, yyyy")) ||
                a.ExtraFields.Any(kv => Has(kv.Key) || Has(kv.Value));
     }
 
