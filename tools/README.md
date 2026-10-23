@@ -4,7 +4,7 @@ Small, throwaway-style console tools used to investigate real incidents against 
 app's data (a reported data-loss, a stale sync, etc.) without touching the production
 app itself. Kept here for future debugging rather than deleted after each use.
 
-**Build order matters**: all three reference `PersonalVault.dll` (and, for the Drive
+**Build order matters**: all four reference `PersonalVault.dll` (and, for the Drive
 tools, `Google.Apis.*.dll`) via `HintPath` pointing at `C:\Personal\build\` - the main
 app's own `OutputPath` (see `PersonalVault/PersonalVault.csproj`). Build the main solution
 at least once first, then build whichever tool you need:
@@ -50,9 +50,28 @@ Refuses to run if zero or more than one file matches.
 driveupload.exe "F:\GitHub\PersonalVault\PersonalVault\Instructions\PersonalVault-Share-Setup-Guide.html" "PersonalVaultData-backup-2026-10-23.pvlt"
 ```
 
-**Limitation**: reuses the main app's own Drive sign-in, which only has the narrow
-`drive.file` OAuth scope - it can only see files the PersonalVault app itself created
-(vault, payments, settings, dated backups, share files). It cannot see or update files
-uploaded through a different Drive connection or account, such as a manually-maintained
-onboarding-docs folder - those need a broader-access Drive connection or a manual
-upload instead.
+**Limitation**: reuses whichever credentials folder it's pointed at (the main app's own
+by default). What that credential set can actually see on Drive depends on both the
+Google account behind it and the OAuth client's own scope - don't assume either way;
+use `whoami` below to check directly instead of guessing.
+
+## whoami
+
+Shows which Google account a given credentials folder (`credentials.json` + a
+`drive-token/` subfolder) actually signs in as, and optionally checks whether that
+credential set can see a named Drive folder and lists its contents. Read-only - never
+writes, deletes, or uploads anything.
+
+```
+whoami.exe
+whoami.exe "C:\Personal\dev-credentials"
+whoami.exe "C:\Personal\dev-credentials" "Sharing"
+```
+
+This project ended up with more than one Google Drive identity in play (see this repo's
+project memory on the account split, if one exists in your session). Before assuming a
+Drive folder is unreachable, check directly which account a credentials folder is
+actually signed in as and what it can see, rather than guessing from the OAuth scope
+alone - `drive.file` is a scope limitation (what the OAuth *client* created), not simply
+an account-identity one, and in practice an older/different credentials folder can
+sometimes see more than expected.

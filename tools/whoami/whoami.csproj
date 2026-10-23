@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Assumes the main PersonalVault.csproj has already been built once (its
+         OutputPath is C:\Personal\build\ - see PersonalVault/PersonalVault.csproj),
+         which also drops the Google.Apis.* DLLs referenced below into that folder. -->
+    <Reference Include="PersonalVault">
+      <HintPath>C:\Personal\build\PersonalVault.dll</HintPath>
+    </Reference>
+    <Reference Include="Google.Apis.Drive.v3">
+      <HintPath>C:\Personal\build\Google.Apis.Drive.v3.dll</HintPath>
+    </Reference>
+    <Reference Include="Google.Apis">
+      <HintPath>C:\Personal\build\Google.Apis.dll</HintPath>
+    </Reference>
+    <Reference Include="Google.Apis.Core">
+      <HintPath>C:\Personal\build\Google.Apis.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="Google.Apis.Auth">
+      <HintPath>C:\Personal\build\Google.Apis.Auth.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>
