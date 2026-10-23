@@ -345,9 +345,11 @@ once it eventually expires.
    from your Pages URL in step 1 -> **Save**. This is stored in your local settings and
    is what the app uses to build `https://<username>.github.io/PersonalVault/share/`
    links - no rebuild needed, and it follows the vault to a new PC during disaster
-   recovery (see "Disaster recovery" below). It assumes the repo stays named
-   `PersonalVault` with Pages served from `/docs`, matching step 1 - if you forked or
-   renamed the repo, the link the app builds won't match your real Pages URL.
+   recovery (see "Disaster recovery" below). This assumes the repo is named
+   `PersonalVault` with Pages served from `/docs`, matching step 1 - if your repo has a
+   different name (forked, renamed, or GitHub auto-suffixed it), enter
+   `username/reponame` instead (e.g. `yourusername/MyPersonalVault`) so the link the app
+   builds actually matches your real Pages URL.
 
 **Using it:** in the account list window, select an account -> **Share...** -> pick how
 long the link should stay live *if nobody opens it* -> **Create Link**. The link is
