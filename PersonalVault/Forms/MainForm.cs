@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Drawing;
+using System.Reflection;
 using System.Windows.Forms;
 using PersonalVault.Models;
 using PersonalVault.Utils;
@@ -13,6 +14,15 @@ namespace PersonalVault.Forms;
 /// </summary>
 public class MainForm : Form
 {
+    /// <summary>
+    /// "Personal Vault vX.Y.Z" - read from the csproj's &lt;Version&gt; via the
+    /// assembly's own metadata, so bumping that one value keeps the window title (and
+    /// Drive-status variant below) in sync automatically instead of needing the version
+    /// string hand-edited in two places here as well.
+    /// </summary>
+    private static readonly string AppTitle =
+        $"Personal Vault v{Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "?"}";
+
     private VaultData _vault;
     private readonly Action _save;
     private readonly Func<Task> _signInToDrive;
@@ -158,7 +168,7 @@ public class MainForm : Form
         _getBackupThrottleMinutes = getBackupThrottleMinutes;
         _setBackupThrottleMinutes = setBackupThrottleMinutes;
 
-        Text = "Personal Vault";
+        Text = AppTitle;
         Width = 960;
         Height = 645;
         StartPosition = FormStartPosition.CenterScreen;
@@ -496,7 +506,7 @@ public class MainForm : Form
             _driveSignInButton.Visible = true;
         }
 
-        Text = isConnected ? "Personal Vault  —  Google Drive: Connected" : "Personal Vault  —  Google Drive: Not Connected";
+        Text = isConnected ? $"{AppTitle}  —  Google Drive: Connected" : $"{AppTitle}  —  Google Drive: Not Connected";
     }
 
     private static void OpenContainingFolder(string filePath)

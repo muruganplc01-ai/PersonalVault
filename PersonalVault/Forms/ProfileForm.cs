@@ -57,7 +57,7 @@ public class ProfileForm : Form
     // label - same "feature on the left, control on the right" treatment as every
     // button above, instead of being stacked under their own label on the left.
     private readonly CheckBox _debugLoggingBox = new() { Text = "Enable diagnostic logging", AutoSize = true, Location = new Point(ButtonX, 713) };
-    private readonly CheckBox _backupOnEverySaveBox = new() { Text = "Back up on every save", AutoSize = true, Location = new Point(ButtonX, 767) };
+    private readonly CheckBox _backupOnEverySaveBox = new() { Text = "Take a snapshot on every save", AutoSize = true, Location = new Point(ButtonX, 767) };
     private readonly NumericUpDown _backupThrottleMinutesBox = new()
     {
         Location = new Point(220, 787), Width = 70, Minimum = 1, Maximum = 1440, Value = 60
@@ -274,10 +274,10 @@ public class ProfileForm : Form
             ForeColor = Color.DimGray
         });
 
-        Controls.Add(new Label { Text = "Backups:", AutoSize = true, Location = new Point(ColX, 767) });
+        Controls.Add(new Label { Text = "Dated backup snapshots:", AutoSize = true, Location = new Point(ColX, 767) });
         Controls.Add(_backupOnEverySaveBox);
 
-        var backupMinutesLabel = new Label { Text = "Minutes between backups:", AutoSize = true, Location = new Point(ColX, 789) };
+        var backupMinutesLabel = new Label { Text = "Minutes between snapshots:", AutoSize = true, Location = new Point(ColX, 789) };
         Controls.Add(backupMinutesLabel);
         Controls.Add(_backupThrottleMinutesBox);
         // Grayed out whenever "Back up on every save" is checked, since the throttle
@@ -291,12 +291,22 @@ public class ProfileForm : Form
 
         Controls.Add(new Label
         {
-            Text = "Only applies when \"Back up on every save\" is unchecked. A new dated " +
-                   "backup is skipped if the last one is more recent than this.",
+            // Every save syncs to Drive immediately regardless of this section - this
+            // only controls an EXTRA, separate dated snapshot copy for rolling back to
+            // an earlier point in time. Spelling that out here directly because the old
+            // "Backups:" / "Minutes between backups" wording read as if it gated syncing
+            // itself, which it never has - that confusion came up more than once. Wider
+            // than TextW and shorter wording than a first pass: this row has no
+            // competing control to its right, but is still squeezed between the
+            // "Minutes between snapshots" row above and the Save/Cancel buttons below,
+            // so there's only ~50px of vertical room regardless of width.
+            Text = "Every save syncs to Drive immediately, regardless of this setting - " +
+                   "it only controls an extra DATED snapshot for rolling back later. " +
+                   "Applies only when \"Take a snapshot on every save\" is unchecked.",
             AutoSize = false,
             Location = new Point(ColX, 811),
-            Width = TextW,
-            Height = 30,
+            Width = 600,
+            Height = 48,
             ForeColor = Color.DimGray
         });
 

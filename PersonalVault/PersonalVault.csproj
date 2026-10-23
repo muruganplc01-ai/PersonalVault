@@ -16,7 +16,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>PersonalVault</AssemblyName>
     <RootNamespace>PersonalVault</RootNamespace>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <Authors>You</Authors>
     <Product>Personal Vault</Product>
     <ApplicationIcon>Resources\AppIcon.ico</ApplicationIcon>
