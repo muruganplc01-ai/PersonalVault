@@ -26,12 +26,14 @@ public class AppSettings
     /// <summary>
     /// Set from the Profile form's "GitHub username" field. Used to build "Share
     /// Account" links (see TrayApplicationContext.ShareAccountAsync) as
-    /// "https://{GitHubUsername}.github.io/PersonalVault/share/#...", assuming the repo
-    /// stays named "PersonalVault" and its GitHub Pages site is served from /docs at the
-    /// default branch's root - see README.md's "Sharing an account" section. Unlike
-    /// DefaultBrowserPath, this IS restored from Drive during disaster recovery (see
-    /// LoadOrRestoreSettingsAsync) - it identifies your GitHub account, not this PC, so
-    /// it should follow the vault to a new machine instead of needing to be re-typed.
+    /// "https://{username}.github.io/{repo}/share/#...". Plain "username" assumes a repo
+    /// named exactly "PersonalVault" (the common case); "username/reponame" overrides
+    /// the repo name for anyone whose repo is named differently. Either way, the repo's
+    /// GitHub Pages site must be served from /docs at the default branch's root - see
+    /// README.md's "Sharing an account" section. Unlike DefaultBrowserPath, this IS
+    /// restored from Drive during disaster recovery (see LoadOrRestoreSettingsAsync) -
+    /// it identifies your GitHub account, not this PC, so it should follow the vault to
+    /// a new machine instead of needing to be re-typed.
     /// </summary>
     public string? GitHubUsername { get; set; }
 

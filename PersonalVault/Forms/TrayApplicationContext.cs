@@ -298,10 +298,23 @@ public class TrayApplicationContext : ApplicationContext
         string keyBase64Url = Convert.ToBase64String(key).Replace('+', '-').Replace('/', '_').TrimEnd('=');
         long expUnixSeconds = ((DateTimeOffset)expiresUtc).ToUnixTimeSeconds();
 
-        // Assumes the repo stays named "PersonalVault" with GitHub Pages served from
-        // /docs at the default branch's root - see README.md's "Sharing an account"
+        // GitHubUsername doubles as "username" or "username/reponame" - plain username
+        // keeps assuming a repo literally named "PersonalVault" (the common case, and
+        // the only form this ever accepted before), but anyone whose repo has a
+        // different name (e.g. GitHub auto-suffixed it, or they chose their own) can
+        // type the full "username/reponame" instead of being forced to rename their
+        // repo to match. GitHub Pages still needs to be served from /docs at the
+        // default branch's root either way - see README.md's "Sharing an account"
         // section for the one-time Pages setup this depends on.
-        string viewerBaseUrl = $"https://{_settings.GitHubUsername}.github.io/PersonalVault/share/";
+        string usernamePart = _settings.GitHubUsername!;
+        string repoPart = "PersonalVault";
+        int slashIndex = usernamePart.IndexOf('/');
+        if (slashIndex >= 0)
+        {
+            repoPart = usernamePart[(slashIndex + 1)..];
+            usernamePart = usernamePart[..slashIndex];
+        }
+        string viewerBaseUrl = $"https://{usernamePart}.github.io/{repoPart}/share/";
         return $"{viewerBaseUrl}#id={Uri.EscapeDataString(driveFileId)}&key={keyBase64Url}&exp={expUnixSeconds}";
     }
 
@@ -987,8 +1000,35 @@ public class TrayApplicationContext : ApplicationContext
         // a local snapshot - everything else in that session had no local rollback point.
         BackupLocalVaultBeforeOverwrite();
 
+        int expectedCount = _vault.Accounts.Count;
         VaultStorage.SaveLocal(_vault, _secret);
-        DebugLog.Write($"SaveVault: local file written to '{AppPaths.VaultLocalPath}'. Kicking off UploadToDriveAsync (fire-and-forget)...");
+
+        // Read back what was actually just written and confirm it round-trips to the
+        // account count we meant to save, instead of trusting that a write with no
+        // exception means the content is right. This is exactly the gap that made the
+        // stale-vault-reference bug so dangerous: that save ALSO completed with no
+        // exception and a "Saved to Google Drive" toast, while silently writing the
+        // wrong object. The bug itself is fixed now, but this check stands guard against
+        // this whole CLASS of failure (disk corruption, a future bug, anything) instead
+        // of relying on no-exception-thrown as proof the save was correct.
+        try
+        {
+            var verify = VaultStorage.LoadLocal(_secret);
+            if (verify.Accounts.Count != expectedCount)
+            {
+                DebugLog.Write($"SaveVault: VERIFICATION FAILED - wrote {expectedCount} account(s) but reading the file back shows {verify.Accounts.Count}. Not uploading to Drive.");
+                Notify("Personal Vault", $"Save did NOT verify correctly (expected {expectedCount} account(s), found {verify.Accounts.Count} on disk). Your data may not be safe - do not close the app; contact support.", ToolTipIcon.Error);
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugLog.WriteException("SaveVault: verification read-back failed", ex);
+            Notify("Personal Vault", "Save could not be verified (the file couldn't be read back). Your data may not be safe - do not close the app; contact support.", ToolTipIcon.Error);
+            return;
+        }
+
+        DebugLog.Write($"SaveVault: local file written to '{AppPaths.VaultLocalPath}' and verified ({expectedCount} account(s)). Kicking off UploadToDriveAsync (fire-and-forget)...");
         _ = UploadToDriveAsync();
     }
 

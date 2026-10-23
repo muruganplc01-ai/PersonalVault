@@ -173,6 +173,7 @@ public class ProfileForm : Form
         Controls.Add(new Label
         {
             Text = "Used to build \"Share Account\" links: https://<username>.github.io/PersonalVault/share/. " +
+                   "If your repo isn't named exactly \"PersonalVault\", type \"username/reponame\" instead. " +
                    "Leave blank to disable the Share... button. See README for one-time GitHub Pages setup.",
             AutoSize = false,
             Location = new Point(ColX, 337),
