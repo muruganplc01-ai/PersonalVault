@@ -645,6 +645,13 @@ public class TrayApplicationContext : ApplicationContext
 
             Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
             File.Copy(AppPaths.VaultLocalPath, backupPath, overwrite: true);
+
+            // File.Copy carries the SOURCE file's LastWriteTime onto the copy, so
+            // without this, Explorer's "Date modified" column shows when the content was
+            // last edited - always one save behind the filename's own timestamp, which
+            // is when this backup was actually taken. Stamping "now" here keeps the
+            // displayed date and the filename in agreement.
+            File.SetLastWriteTime(backupPath, DateTime.Now);
             DebugLog.Write($"BackupLocalVaultBeforeOverwrite: backed up current local vault to '{backupPath}'.");
 
             // Prune by CreationTime (when this backup copy was made), not LastWriteTime -
