@@ -634,11 +634,15 @@ public class TrayApplicationContext : ApplicationContext
             File.Copy(AppPaths.VaultLocalPath, backupPath, overwrite: true);
             DebugLog.Write($"BackupLocalVaultBeforeOverwrite: backed up current local vault to '{backupPath}'.");
 
+            // Prune by CreationTime (when this backup copy was made), not LastWriteTime -
+            // File.Copy preserves the SOURCE file's modified time onto the copy, so a
+            // backup of long-unchanged content would otherwise look "7+ days old" and get
+            // deleted the moment it's made, regardless of how old the backup itself is.
             string backupFolder = Path.GetDirectoryName(backupPath)!;
             var cutoff = DateTime.Now.AddDays(-7);
             foreach (var old in Directory.GetFiles(backupFolder, "vault-*.pvlt"))
             {
-                if (File.GetLastWriteTime(old) >= cutoff) continue;
+                if (File.GetCreationTime(old) >= cutoff) continue;
                 try { File.Delete(old); }
                 catch (Exception ex) { DebugLog.WriteException($"BackupLocalVaultBeforeOverwrite (pruning '{old}')", ex); }
             }
@@ -778,6 +782,15 @@ public class TrayApplicationContext : ApplicationContext
                 _isLocked = false;
                 _trayIcon.Text = "Personal Vault";
                 _notifier?.CheckNow(); // catch up on anything missed while locked
+
+                // Critical: _vault was just replaced with a brand-new object loaded fresh
+                // from disk above. The main window isn't destroyed on Lock() (just hidden),
+                // so without this it keeps editing its own stale, orphaned VaultData object -
+                // edits still show up on screen and "Save" still runs with no error, but
+                // SaveVault() serializes THIS _vault field, not whatever the window is
+                // holding, so nothing actually reaches disk until the app is restarted.
+                _mainForm?.RefreshData(_vault);
+
                 return true;
             }
             catch (CryptographicException)
@@ -963,19 +976,16 @@ public class TrayApplicationContext : ApplicationContext
         DebugLog.Write($"SaveVault: called. _vault null? {_vault == null}. _secret null? {_secret == null}.");
         if (_vault == null || _secret == null) return;
 
-        // Dated LOCAL backups, on the same "Back up on every save" / throttle cadence as
-        // the Drive-side dated backups (shares the same LastBackupUtc clock - whichever of
-        // the two save paths runs first for a given save "wins" and the other sees it's
-        // already covered). Previously the local backup/ folder only ever got written to
-        // right before a Drive pull overwrote local content - meaning if Drive sync was
-        // ever down for an extended period, nothing local got backed up either, even
-        // though "Back up on every save" implied it would. See DriveOverwriteWarningForm
-        // for the related fix to the pull side of this.
-        if (ShouldCreateBackupNow())
-        {
-            BackupLocalVaultBeforeOverwrite();
-            MarkBackupCreated();
-        }
+        // Dated LOCAL backup on every single save, unconditionally - deliberately NOT
+        // sharing the Drive-side throttle/MarkBackupCreated() clock below. A local file
+        // copy costs nothing (no API call, no quota), so there's no reason to throttle it
+        // the way Drive's dated backups are throttled, and after the stale-vault-reference
+        // bug (edits that looked saved but silently never reached disk across a lock/
+        // unlock cycle), every save having its own local "before" snapshot is the
+        // difference between a bad save being recoverable or not. Previously this shared
+        // a clock with the Drive-side backup, so only the first save of a given hour got
+        // a local snapshot - everything else in that session had no local rollback point.
+        BackupLocalVaultBeforeOverwrite();
 
         VaultStorage.SaveLocal(_vault, _secret);
         DebugLog.Write($"SaveVault: local file written to '{AppPaths.VaultLocalPath}'. Kicking off UploadToDriveAsync (fire-and-forget)...");
@@ -1468,8 +1478,27 @@ public class TrayApplicationContext : ApplicationContext
 
         if (remoteModified.HasValue && remoteModified.Value > localModified)
         {
-            DebugLog.Write("SyncNowAsync: remote is newer - asking for explicit confirmation before pulling from Drive (DriveOverwriteWarningForm).");
             var bytes = await _drive.DownloadAsync(_driveFileId);
+
+            // Drive's modifiedTime is set when an upload FINISHES, which is always a
+            // moment after the local write that triggered it - so the very next launch
+            // after any save sees "remote is newer" purely from that upload lag, even
+            // though the content is byte-for-byte identical to what's already here.
+            // UploadOrUpdateAsync uploads the local file's bytes as-is (no
+            // re-encryption), so Drive's copy is an exact copy of whatever local looked
+            // like at upload time - comparing raw ciphertext bytes (no secret needed,
+            // this works even before unlock) catches exactly that false-positive case
+            // without bothering the user with a decision that isn't actually one.
+            byte[] localBytes = File.Exists(AppPaths.VaultLocalPath)
+                ? await File.ReadAllBytesAsync(AppPaths.VaultLocalPath)
+                : Array.Empty<byte>();
+            if (localBytes.Length > 0 && localBytes.AsSpan().SequenceEqual(bytes))
+            {
+                DebugLog.Write("SyncNowAsync: remote looked newer by timestamp only (upload-completion lag) - content is byte-for-byte identical to local, nothing to do.");
+                return;
+            }
+
+            DebugLog.Write("SyncNowAsync: remote is newer - asking for explicit confirmation before pulling from Drive (DriveOverwriteWarningForm).");
             var data = VaultStorage.LoadFromBytes(bytes, _secret!);
 
             string backupPath = ComputeNextLocalBackupPath();
